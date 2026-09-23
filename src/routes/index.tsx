@@ -3,7 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Database,
   Eye,
@@ -74,18 +77,65 @@ function formatMoney(value: number | null, currency = "BRL") {
   }).format(value);
 }
 
+const DASHBOARD_TIME_ZONE = "America/Porto_Velho";
+
 function formatDate(value: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleString("pt-BR", {
-    timeZone: "America/Porto_Velho",
+    timeZone: DASHBOARD_TIME_ZONE,
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function dateKeyInPortoVelho(value: string | Date) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: DASHBOARD_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : "";
+}
+
+function todayDateKey() {
+  return dateKeyInPortoVelho(new Date());
+}
+
+function shiftDateKey(dateKey: string, days: number) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0));
+  return date.toISOString().slice(0, 10);
+}
+
+function transactionDateKey(row: Transaction) {
+  const value =
+    row.status === "approved"
+      ? row.approved_at ?? row.approved_received_at ?? row.last_received_at
+      : row.first_received_at ?? row.last_received_at;
+  return value ? dateKeyInPortoVelho(value) : "";
+}
+
+function formatSelectedDate(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "UTC",
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
 }
 
 function formatDelay(seconds: number | null) {
@@ -278,6 +328,7 @@ function Index() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("approved");
+  const [selectedDate, setSelectedDate] = useState(() => todayDateKey());
 
   async function fetchDashboard(key: string, quiet = false) {
     if (!quiet) setRefreshing(true);
@@ -348,8 +399,13 @@ function Index() {
     setRows([]);
   }
 
-  const approved = rows.filter((row) => row.status === "approved");
-  const pending = rows.filter((row) => row.status === "pending");
+  const dayRows = useMemo(
+    () => rows.filter((row) => transactionDateKey(row) === selectedDate),
+    [rows, selectedDate],
+  );
+
+  const approved = dayRows.filter((row) => row.status === "approved");
+  const pending = dayRows.filter((row) => row.status === "pending");
   const problems = approved.filter(
     (row) =>
       (row.webhook_delay_seconds ?? 0) > 60 ||
@@ -367,7 +423,7 @@ function Index() {
 
   const revenue = approved.reduce((sum, row) => sum + (row.value ?? 0), 0);
 
-  const filteredRows = rows.filter((row) =>
+  const filteredRows = dayRows.filter((row) =>
     statusFilter === "all" ? true : row.status === statusFilter,
   );
 
@@ -449,6 +505,63 @@ function Index() {
           </div>
         )}
 
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-slate-100 p-2.5 text-slate-700">
+                <CalendarDays className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Data do painel
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-950">
+                  {selectedDate === todayDateKey()
+                    ? `Hoje · ${formatSelectedDate(selectedDate)}`
+                    : formatSelectedDate(selectedDate)}
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  Horário de Rondônia · America/Porto_Velho
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedDate(shiftDateKey(selectedDate, -1))}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                aria-label="Dia anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) =>
+                  event.target.value && setSelectedDate(event.target.value)
+                }
+                className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-slate-400"
+              />
+              <button
+                type="button"
+                onClick={() => setSelectedDate(shiftDateKey(selectedDate, 1))}
+                disabled={selectedDate >= todayDateKey()}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Próximo dia"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDate(todayDateKey())}
+                className="h-9 rounded-lg bg-slate-950 px-3 text-xs font-bold text-white hover:bg-slate-800"
+              >
+                Hoje
+              </button>
+            </div>
+          </div>
+        </section>
+
         <section className="grid gap-4 md:grid-cols-3">
           <ConnectionCard
             name="Vega / AppMax"
@@ -474,7 +587,7 @@ function Index() {
           <Metric
             label="Vendas aprovadas"
             value={String(approved.length)}
-            detail="Nas últimas transações armazenadas"
+            detail={`No dia ${selectedDate.split("-").reverse().join("/")}`}
             icon={CheckCircle2}
           />
           <Metric
@@ -563,9 +676,9 @@ function Index() {
               </div>
               <div className="flex items-center justify-between rounded-xl bg-slate-100 px-4 py-3">
                 <span className="text-sm font-medium text-slate-700">
-                  Total de registros
+                  Total no dia
                 </span>
-                <span className="font-bold text-slate-900">{rows.length}</span>
+                <span className="font-bold text-slate-900">{dayRows.length}</span>
               </div>
             </div>
           </div>
@@ -737,7 +850,7 @@ function Index() {
                     className="rounded-xl border border-slate-200 bg-slate-50 p-3"
                   >
                     <p className="text-xl font-bold text-slate-950">
-                      {rows.filter((row) => row.fbc_status === status).length}
+                      {dayRows.filter((row) => row.fbc_status === status).length}
                     </p>
                     <p className="mt-1 text-[11px] font-medium text-slate-500">
                       {fbcLabel(status)}
@@ -769,7 +882,7 @@ function Index() {
         <footer className="flex flex-col gap-1 border-t border-slate-200 pt-5 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
           <span>TrackUp · diagnóstico de rastreamento</span>
           <span>
-            Atualização automática a cada 30s
+            Atualização automática a cada 10s
             {generatedAt ? ` · servidor: ${formatDate(generatedAt)}` : ""}
           </span>
         </footer>
