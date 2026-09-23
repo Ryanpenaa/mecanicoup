@@ -62,11 +62,40 @@ type Transaction = {
   purchase_sent_at: string | null;
 };
 
+type TrafficSummary = {
+  visits: number;
+  engaged_15s: number;
+  scroll_50: number;
+  scroll_75: number;
+  view_plans: number;
+  select_plan: number;
+  checkout_click: number;
+  pix_generated: number;
+  purchases: number;
+};
+
+type CreativeQuality = {
+  utm_source: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  visits: number;
+  engaged_15s: number;
+  view_plans: number;
+  select_plan: number;
+  checkout_click: number;
+  pix_generated: number;
+  purchases: number;
+};
+
 type DashboardResponse = {
   ok: boolean;
   generated_at: string;
   meta_capi_enabled: boolean;
   rows: Transaction[];
+  traffic?: {
+    summary: TrafficSummary;
+    creatives: CreativeQuality[];
+  };
 };
 
 function formatMoney(value: number | null, currency = "BRL") {
@@ -136,6 +165,11 @@ function formatSelectedDate(dateKey: string) {
     month: "2-digit",
     year: "numeric",
   }).format(date);
+}
+
+function formatPercent(value: number, total: number) {
+  if (!total) return "0%";
+  return `${Math.round((value / total) * 100)}%`;
 }
 
 function formatDelay(seconds: number | null) {
@@ -329,16 +363,32 @@ function Index() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("approved");
   const [selectedDate, setSelectedDate] = useState(() => todayDateKey());
+  const [activeTab, setActiveTab] = useState<"transactions" | "traffic">("transactions");
+  const [trafficSummary, setTrafficSummary] = useState<TrafficSummary>({
+    visits: 0,
+    engaged_15s: 0,
+    scroll_50: 0,
+    scroll_75: 0,
+    view_plans: 0,
+    select_plan: 0,
+    checkout_click: 0,
+    pix_generated: 0,
+    purchases: 0,
+  });
+  const [creativeQuality, setCreativeQuality] = useState<CreativeQuality[]>([]);
 
   async function fetchDashboard(key: string, quiet = false) {
     if (!quiet) setRefreshing(true);
     try {
-      const response = await fetch(DASHBOARD_ENDPOINT, {
+      const response = await fetch(
+        `${DASHBOARD_ENDPOINT}?date=${encodeURIComponent(selectedDate)}`,
+        {
         headers: {
           "x-dashboard-key": key,
         },
-        cache: "no-store",
-      });
+          cache: "no-store",
+        },
+      );
 
       if (response.status === 401) {
         localStorage.removeItem(STORAGE_KEY);
@@ -354,6 +404,20 @@ function Index() {
       if (!body.ok) throw new Error("Resposta inválida");
 
       setRows(body.rows ?? []);
+      setTrafficSummary(
+        body.traffic?.summary ?? {
+          visits: 0,
+          engaged_15s: 0,
+          scroll_50: 0,
+          scroll_75: 0,
+          view_plans: 0,
+          select_plan: 0,
+          checkout_click: 0,
+          pix_generated: 0,
+          purchases: 0,
+        },
+      );
+      setCreativeQuality(body.traffic?.creatives ?? []);
       setGeneratedAt(body.generated_at ?? null);
       setError(null);
       return true;
@@ -382,7 +446,12 @@ function Index() {
       void fetchDashboard(dashboardKey, true);
     }, 10000);
     return () => window.clearInterval(timer);
-  }, [dashboardKey]);
+  }, [dashboardKey, selectedDate]);
+
+  useEffect(() => {
+    if (!dashboardKey) return;
+    void fetchDashboard(dashboardKey, true);
+  }, [dashboardKey, selectedDate]);
 
   async function unlock(key: string) {
     const ok = await fetchDashboard(key);
@@ -562,6 +631,170 @@ function Index() {
           </div>
         </section>
 
+        <div className="flex gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setActiveTab("transactions")}
+            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+              activeTab === "transactions"
+                ? "bg-slate-950 text-white"
+                : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Vendas / Webhooks
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("traffic")}
+            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+              activeTab === "traffic"
+                ? "bg-slate-950 text-white"
+                : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Qualidade do tráfego
+          </button>
+        </div>
+
+        {activeTab === "traffic" && (
+          <>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+              Os dados de comportamento (15s, scroll e visualização de planos) contam a partir da ativação deste módulo. Visitas e vendas anteriores continuam aparecendo, mas sem retroagir esses eventos.
+            </div>
+
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              {[
+                ["Visitas", trafficSummary.visits],
+                ["15s engajado", trafficSummary.engaged_15s],
+                ["Scroll 50%", trafficSummary.scroll_50],
+                ["Scroll 75%", trafficSummary.scroll_75],
+                ["Viu planos", trafficSummary.view_plans],
+                ["Selecionou plano", trafficSummary.select_plan],
+                ["Clicou no checkout", trafficSummary.checkout_click],
+                ["PIX gerado", trafficSummary.pix_generated],
+                ["Compras", trafficSummary.purchases],
+              ].map(([label, rawValue]) => {
+                const value = Number(rawValue);
+                return (
+                  <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-slate-500">{label}</p>
+                    <div className="mt-2 flex items-end justify-between gap-2">
+                      <p className="text-2xl font-bold text-slate-950">{value}</p>
+                      <p className="text-xs font-bold text-slate-400">
+                        {label === "Visitas"
+                          ? "100%"
+                          : formatPercent(value, trafficSummary.visits)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div>
+                <h2 className="font-bold text-slate-950">Funil de qualidade</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Mostra onde o tráfego do dia está perdendo força antes da compra.
+                </p>
+              </div>
+              <div className="mt-5 grid gap-2">
+                {[
+                  ["Visitas", trafficSummary.visits],
+                  ["15s engajado", trafficSummary.engaged_15s],
+                  ["Viu planos", trafficSummary.view_plans],
+                  ["Selecionou plano", trafficSummary.select_plan],
+                  ["Clicou checkout", trafficSummary.checkout_click],
+                  ["PIX gerado", trafficSummary.pix_generated],
+                  ["Compra", trafficSummary.purchases],
+                ].map(([label, rawValue]) => {
+                  const value = Number(rawValue);
+                  const width = trafficSummary.visits
+                    ? Math.max(3, Math.round((value / trafficSummary.visits) * 100))
+                    : 0;
+                  return (
+                    <div key={String(label)} className="grid grid-cols-[120px_1fr_70px] items-center gap-3">
+                      <span className="text-xs font-semibold text-slate-600">{label}</span>
+                      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-slate-900 transition-all"
+                          style={{ width: `${width}%` }}
+                        />
+                      </div>
+                      <span className="text-right text-xs font-bold text-slate-700">
+                        {value} · {formatPercent(value, trafficSummary.visits)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section>
+              <div className="mb-3">
+                <h2 className="font-bold text-slate-950">Qualidade por criativo</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  UTMs do anúncio cruzadas com comportamento, PIX e compras.
+                </p>
+              </div>
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1080px] text-left text-sm">
+                    <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3.5">Criativo</th>
+                        <th className="px-4 py-3.5">Fonte</th>
+                        <th className="px-4 py-3.5">Visitas</th>
+                        <th className="px-4 py-3.5">15s</th>
+                        <th className="px-4 py-3.5">Viu planos</th>
+                        <th className="px-4 py-3.5">Clique checkout</th>
+                        <th className="px-4 py-3.5">PIX</th>
+                        <th className="px-4 py-3.5">Compras</th>
+                        <th className="px-4 py-3.5">Conv.</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {creativeQuality.map((row, index) => (
+                        <tr key={`${row.utm_source}-${row.utm_campaign}-${row.utm_content}-${index}`}>
+                          <td className="px-4 py-3.5">
+                            <div className="max-w-[220px] truncate font-semibold text-slate-800">
+                              {row.utm_content ?? "sem utm_content"}
+                            </div>
+                            <div className="mt-1 max-w-[220px] truncate text-[11px] text-slate-400">
+                              {row.utm_campaign ?? "sem campanha"}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-xs font-semibold text-slate-600">
+                            {row.utm_source ?? "direto"}
+                          </td>
+                          <td className="px-4 py-3.5 font-bold">{row.visits}</td>
+                          <td className="px-4 py-3.5">{row.engaged_15s}</td>
+                          <td className="px-4 py-3.5">{row.view_plans}</td>
+                          <td className="px-4 py-3.5">{row.checkout_click}</td>
+                          <td className="px-4 py-3.5">{row.pix_generated}</td>
+                          <td className="px-4 py-3.5 font-bold text-emerald-700">{row.purchases}</td>
+                          <td className="px-4 py-3.5 font-bold">
+                            {formatPercent(row.purchases, row.visits)}
+                          </td>
+                        </tr>
+                      ))}
+                      {!creativeQuality.length && (
+                        <tr>
+                          <td colSpan={9} className="px-4 py-10 text-center text-sm text-slate-400">
+                            Ainda não há tráfego registrado nesta data.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </>
+        )}
+
+        {activeTab === "transactions" && (
+          <>
         <section className="grid gap-4 md:grid-cols-3">
           <ConnectionCard
             name="Vega / AppMax"
@@ -878,6 +1111,9 @@ function Index() {
             </div>
           </div>
         </section>
+
+          </>
+        )}
 
         <footer className="flex flex-col gap-1 border-t border-slate-200 pt-5 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
           <span>TrackUp · diagnóstico de rastreamento</span>
