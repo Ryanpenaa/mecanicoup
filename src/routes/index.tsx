@@ -329,7 +329,7 @@ function Index() {
     if (!dashboardKey) return;
     const timer = window.setInterval(() => {
       void fetchDashboard(dashboardKey, true);
-    }, 30000);
+    }, 10000);
     return () => window.clearInterval(timer);
   }, [dashboardKey]);
 
