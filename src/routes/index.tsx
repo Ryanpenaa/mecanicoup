@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { TrackUpChat } from "../components/TrackUpChat";
 import {
   Activity,
   AlertTriangle,
@@ -1123,6 +1124,12 @@ function Index() {
           </span>
         </footer>
       </main>
+      {dashboardKey && (
+        <TrackUpChat
+          dashboardKey={dashboardKey}
+          selectedDate={selectedDate}
+        />
+      )}
     </div>
   );
 }
