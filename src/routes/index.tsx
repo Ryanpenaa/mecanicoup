@@ -51,6 +51,7 @@ type Transaction = {
   webhook_delay_seconds: number | null;
   product_id: string | null;
   product_name: string | null;
+  product_key: string | null;
   offer_id: string | null;
   utm_source: string | null;
   utm_medium: string | null;
@@ -61,6 +62,10 @@ type Transaction = {
   has_fbp: boolean;
   purchase_sent_by_trackup: boolean;
   purchase_sent_at: string | null;
+  meta_purchase_error: string | null;
+  meta_purchase_attempts: number;
+  meta_purchase_last_attempt_at: string | null;
+  meta_event_id: string | null;
 };
 
 type TrafficSummary = {
@@ -92,6 +97,7 @@ type DashboardResponse = {
   ok: boolean;
   generated_at: string;
   meta_capi_enabled: boolean;
+  meta_pixel_id?: string | null;
   rows: Transaction[];
   traffic?: {
     summary: TrafficSummary;
@@ -359,6 +365,7 @@ function Index() {
   const [dashboardKey, setDashboardKey] = useState<string | null>(null);
   const [rows, setRows] = useState<Transaction[]>([]);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [metaCapiEnabled, setMetaCapiEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -405,6 +412,7 @@ function Index() {
       if (!body.ok) throw new Error("Resposta inválida");
 
       setRows(body.rows ?? []);
+      setMetaCapiEnabled(Boolean(body.meta_capi_enabled));
       setTrafficSummary(
         body.traffic?.summary ?? {
           visits: 0,
@@ -523,7 +531,7 @@ function Index() {
             <div>
               <h1 className="font-bold tracking-tight">TrackUp</h1>
               <p className="text-xs text-slate-400">
-                Vega/AppMax → Supabase · modo observação
+                Vega/AppMax → Supabase → Meta CAPI
               </p>
             </div>
           </div>
@@ -558,12 +566,12 @@ function Index() {
             <Eye className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
             <div>
               <p className="text-sm font-bold text-blue-950">
-                Modo observação ativo
+                {metaCapiEnabled ? "Meta CAPI ativa" : "Modo observação ativo"}
               </p>
               <p className="mt-1 text-xs leading-5 text-blue-800">
-                Este painel está recebendo e lendo os webhooks reais do
-                Vega/AppMax. O TrackUp não está enviando Purchase para a Meta,
-                então não cria venda duplicada nem altera sua campanha atual.
+                {metaCapiEnabled
+                  ? "Vendas approved recebidas do Vega são enviadas pelo TrackUp para a Meta com trava contra duplicação."
+                  : "O TrackUp já está pronto para enviar Purchase, mas o envio permanece desligado para evitar duplicação enquanto o Vega ainda envia eventos para o mesmo Pixel."}
               </p>
             </div>
           </div>
@@ -811,8 +819,12 @@ function Index() {
           />
           <ConnectionCard
             name="Meta CAPI"
-            detail="Continua desligada no TrackUp enquanto investigamos o atraso."
-            status="off"
+            detail={
+              metaCapiEnabled
+                ? "TrackUp envia Purchase aprovado diretamente para o Pixel, com event_id único por transação."
+                : "Integração pronta, mas desligada até removermos o Purchase do Vega."
+            }
+            status={metaCapiEnabled ? "connected" : "off"}
             icon={Zap}
           />
         </section>
@@ -981,6 +993,7 @@ function Index() {
                           {row.product_name ??
                             row.product_id ??
                             "produto ainda não identificado"}
+                          {row.product_key ? ` · ${row.product_key}` : ""}
                         </div>
                       </td>
                       <td className="px-4 py-4">
@@ -1041,10 +1054,32 @@ function Index() {
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
-                          <Eye className="h-3.5 w-3.5" />
-                          não enviado
-                        </span>
+                        {row.purchase_sent_by_trackup ? (
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              enviado
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {formatDate(row.purchase_sent_at)}
+                            </span>
+                          </div>
+                        ) : row.meta_purchase_error ? (
+                          <div className="flex max-w-[180px] flex-col items-start gap-1">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700 ring-1 ring-inset ring-red-200">
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              erro Meta
+                            </span>
+                            <span className="line-clamp-2 text-[10px] text-red-500">
+                              {row.meta_purchase_error}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                            <Eye className="h-3.5 w-3.5" />
+                            {metaCapiEnabled ? "aguardando" : "não enviado"}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1108,7 +1143,9 @@ function Index() {
             <div className="mt-4 space-y-2 text-xs leading-5 text-slate-600">
               <p>• E-mail, telefone e IP não aparecem na interface.</p>
               <p>• O painel recebe somente campos técnicos necessários ao diagnóstico.</p>
-              <p>• Meta CAPI permanece desligada nesta etapa.</p>
+              <p>
+                • Meta CAPI: {metaCapiEnabled ? "ATIVA — Purchase automático após approved." : "DESLIGADA — pronta para ativação segura."}
+              </p>
             </div>
           </div>
         </section>
