@@ -35,13 +35,20 @@ const STORAGE_KEY = "trackup_dashboard_key";
 const ADS_ENDPOINT = "https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/meta-ads-insights";
 type AdRow = {ad_id:string;ad_name:string;campaign_name:string;spend:string;clicks:string;impressions:string};
 function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
+  const [accounts,setAccounts]=useState<{id:string;account_id:string;name:string;business?:{id:string;name:string}}[]>([]);
+  const [selectedAccount,setSelectedAccount]=useState("");
+  const [selectedBm,setSelectedBm]=useState("all");
+  useEffect(()=>{
+    fetch(ADS_ENDPOINT+"?action=accounts",{headers:{"x-dashboard-key":dashboardKey}})
+      .then(r=>r.json()).then(d=>{if(d.ok)setAccounts(d.accounts||[]);}).catch(()=>{});
+  },[dashboardKey]);
   const [rows,setRows]=useState<AdRow[]>([]);
   const [message,setMessage]=useState("Clique em consultar para carregar os dados da Meta.");
   const [busy,setBusy]=useState(false);
   const load=async()=>{
     setBusy(true);
     try {
-      const res=await fetch(ADS_ENDPOINT+"?date="+encodeURIComponent(date),{headers:{"x-dashboard-key":dashboardKey}});
+      const res=await fetch(ADS_ENDPOINT+"?date="+encodeURIComponent(date)+"&account_id="+encodeURIComponent(selectedAccount),{headers:{"x-dashboard-key":dashboardKey}});
       const data=await res.json();
       if(!res.ok){setMessage(data.error==="meta_ads_not_configured"?"Conexão pendente: configure o acesso de leitura da Meta no Supabase.":data.detail||data.error||"Falha na consulta.");setRows([]);}
       else {setRows(data.ads||[]);setMessage((data.ads||[]).length+" anúncios encontrados para "+date);}
@@ -50,8 +57,8 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   };
   return <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Meta Ads — gastos por anúncio</h2><p className="text-sm text-slate-500">Somente leitura. Dados oficiais da Marketing API, quando conectada.</p></div>
-    <button type="button" disabled={busy} onClick={load} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?"Consultando...":"Consultar Meta Ads"}</button></div>
-    <p className="text-sm text-slate-600">{message}</p>
+    <button type="button" disabled={busy||!selectedAccount} onClick={load} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?"Consultando...":"Consultar Meta Ads"}</button></div>
+    <div className="grid gap-3 sm:grid-cols-2"><select aria-label="Business Manager" className="rounded-lg border p-2" value={selectedBm} onChange={e=>{setSelectedBm(e.target.value);setSelectedAccount("");}}><option value="all">Todas as BMs</option>{Array.from(new Map(accounts.filter(a=>a.business).map(a=>[a.business!.id,a.business!])).values()).map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select><select aria-label="Conta de anúncios" className="rounded-lg border p-2" value={selectedAccount} onChange={e=>setSelectedAccount(e.target.value)}><option value="">Selecionar conta de anúncios</option>{accounts.filter(a=>selectedBm==="all"||a.business?.id===selectedBm).map(a=><option key={a.id} value={a.account_id}>{a.name}</option>)}</select></div><p className="text-sm text-slate-600">{message}</p>
     {rows.length>0&&<div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-2">Anúncio</th><th className="p-2">Campanha</th><th className="p-2">Gasto</th><th className="p-2">Cliques</th><th className="p-2">Impressões</th></tr></thead>
     <tbody>{rows.map(row=><tr key={row.ad_id} className="border-b"><td className="p-2">{row.ad_name}</td><td className="p-2">{row.campaign_name}</td><td className="p-2">{formatMoney(Number(row.spend))}</td><td className="p-2">{row.clicks}</td><td className="p-2">{row.impressions}</td></tr>)}</tbody></table></div>}
   </section>;
