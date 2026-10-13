@@ -55,7 +55,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     {key:"cost_purchase",label:"Custo por compra"},{key:"roas",label:"ROAS (Meta)"},
     {key:"trackup_purchases",label:"Compras (TrackUp)"},{key:"trackup_revenue",label:"Receita (TrackUp)"},{key:"trackup_cpa",label:"CPA (TrackUp)"},{key:"trackup_roas",label:"ROAS (TrackUp)"}
   ];
-  const [columns,setColumns]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_columns")||"null");return Array.isArray(v)?v:["spend","impressions","clicks","cpc","ctr","landing_views","purchases"]; }catch{return ["spend","impressions","clicks","cpc","ctr","landing_views","purchases"];}});
+  const [columns,setColumns]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_columns")||"null");return Array.isArray(v)?v:["spend","impressions","clicks","cpc","ctr","landing_views","purchases","trackup_purchases","trackup_roas"]; }catch{return ["spend","impressions","clicks","cpc","ctr","landing_views","purchases"];}});
   const [configure,setConfigure]=useState(false);
   const setColumn=(key:string,enabled:boolean)=>{const next=enabled?[...columns,key]:columns.filter(c=>c!==key);setColumns(next);try{localStorage.setItem("trackup_meta_columns",JSON.stringify(next));}catch{}};
 
