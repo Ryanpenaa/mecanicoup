@@ -33,7 +33,7 @@ const DASHBOARD_ENDPOINT =
   "https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/tracking-dashboard";
 const STORAGE_KEY = "trackup_dashboard_key";
 const ADS_ENDPOINT = "https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/meta-ads-insights";
-type AdRow = {ad_id:string;ad_name:string;campaign_id:string;campaign_name:string;adset_id:string;adset_name:string;spend:string;clicks:string;impressions:string};
+type AdRow = {ad_id:string;ad_name:string;campaign_id:string;campaign_name:string;adset_id:string;adset_name:string;spend:string;clicks:string;impressions:string;reach?:string;frequency?:string;inline_link_clicks?:string;actions?:{action_type:string;value:string}[];action_values?:{action_type:string;value:string}[]};
 type AdLevel = "campaign" | "adset" | "ad";
 type MetaAccount = {id:string;account_id:string;name:string;business?:{id:string;name:string}};
 function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
@@ -43,6 +43,18 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   const [selectedAccount,setSelectedAccount]=useState("");
   const [selectedBm,setSelectedBm]=useState("");
   const [level,setLevel]=useState<AdLevel>("campaign");
+  const columnOptions = [
+    {key:"spend",label:"Gasto"},{key:"impressions",label:"Impressões"},{key:"reach",label:"Alcance"},{key:"frequency",label:"Frequência"},
+    {key:"clicks",label:"Cliques (todos)"},{key:"link_clicks",label:"Cliques no link"},{key:"cpc",label:"CPC (todos)"},{key:"link_cpc",label:"CPC no link"},
+    {key:"ctr",label:"CTR (todos)"},{key:"link_ctr",label:"CTR no link"},{key:"cpm",label:"CPM"},
+    {key:"landing_views",label:"Visualizações da página de destino"},{key:"cost_landing",label:"Custo por visualização"},
+    {key:"initiate_checkout",label:"Checkouts iniciados"},{key:"purchases",label:"Compras (Meta)"},{key:"purchase_value",label:"Valor de compras (Meta)"},
+    {key:"cost_purchase",label:"Custo por compra"},{key:"roas",label:"ROAS (Meta)"}
+  ];
+  const [columns,setColumns]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_columns")||"null");return Array.isArray(v)?v:["spend","impressions","clicks","cpc","ctr","landing_views","purchases"]; }catch{return ["spend","impressions","clicks","cpc","ctr","landing_views","purchases"];}});
+  const [configure,setConfigure]=useState(false);
+  const setColumn=(key:string,enabled:boolean)=>{const next=enabled?[...columns,key]:columns.filter(c=>c!==key);setColumns(next);try{localStorage.setItem("trackup_meta_columns",JSON.stringify(next));}catch{}};
+
   const [rows,setRows]=useState<AdRow[]>([]);
   const [message,setMessage]=useState("Selecione uma BM e uma conta de anúncios.");
   const [busy,setBusy]=useState(false);
@@ -69,18 +81,49 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     } catch(e) {setMessage(e instanceof Error?e.message:"Não foi possível consultar a Meta.");}
     finally {setBusy(false);}
   };
-  const metrics=new Map<string,{id:string;name:string;spend:number;clicks:number;impressions:number}>();
+  const metrics=new Map<string,{id:string;name:string;spend:number;clicks:number;impressions:number;link_clicks:number;reach:number;actions:Record<string,number>;values:Record<string,number>;count:number}>();
+  const getAction=(obj:Record<string,number>,keys:string[])=>keys.reduce((sum,key)=>sum+(obj[key]||0),0);
   for(const item of rows){
     const id=level==="campaign"?item.campaign_id:level==="adset"?item.adset_id:item.ad_id;
     const name=level==="campaign"?item.campaign_name:level==="adset"?item.adset_name:item.ad_name;
     if(!id)continue;
-    const itemMetrics=metrics.get(id)||{id,name:name||id,spend:0,clicks:0,impressions:0};
-    itemMetrics.spend+=Number(item.spend)||0;
-    itemMetrics.clicks+=Number(item.clicks)||0;
-    itemMetrics.impressions+=Number(item.impressions)||0;
-    metrics.set(id,itemMetrics);
+    const m=metrics.get(id)||{id,name:name||id,spend:0,clicks:0,impressions:0,link_clicks:0,reach:0,actions:{},values:{},count:0};
+    m.spend+=Number(item.spend)||0;m.clicks+=Number(item.clicks)||0;m.impressions+=Number(item.impressions)||0;
+    m.link_clicks+=Number(item.inline_link_clicks)||0;m.reach+=Number(item.reach)||0;m.count++;
+    for(const a of item.actions||[])m.actions[a.action_type]=(m.actions[a.action_type]||0)+(Number(a.value)||0);
+    for(const a of item.action_values||[])m.values[a.action_type]=(m.values[a.action_type]||0)+(Number(a.value)||0);
+    metrics.set(id,m);
   }
   const report=Array.from(metrics.values()).sort((a,b)=>b.spend-a.spend);
+  const metric=(m:typeof report[number],key:string):string=>{
+    const landing=getAction(m.actions,["landing_page_view"]);
+    const checkout=getAction(m.actions,["initiate_checkout","omni_initiated_checkout"]);
+    const purchases=getAction(m.actions,["purchase","omni_purchase"]);
+    const value=getAction(m.values,["purchase","omni_purchase"]);
+    const money=(v:number)=>formatMoney(v);
+    const number=(v:number)=>new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(v);
+    switch(key){
+      case "spend":return money(m.spend);
+      case "impressions":return number(m.impressions);
+      case "reach":return m.count===1?number(m.reach):"—";
+      case "frequency":return m.count===1&&m.reach?number(m.impressions/m.reach):"—";
+      case "clicks":return number(m.clicks);
+      case "link_clicks":return number(m.link_clicks);
+      case "cpc":return m.clicks?money(m.spend/m.clicks):"—";
+      case "link_cpc":return m.link_clicks?money(m.spend/m.link_clicks):"—";
+      case "ctr":return m.impressions?number(m.clicks/m.impressions*100)+"%":"—";
+      case "link_ctr":return m.impressions?number(m.link_clicks/m.impressions*100)+"%":"—";
+      case "cpm":return m.impressions?money(m.spend/m.impressions*1000):"—";
+      case "landing_views":return number(landing);
+      case "cost_landing":return landing?money(m.spend/landing):"—";
+      case "initiate_checkout":return number(checkout);
+      case "purchases":return number(purchases);
+      case "purchase_value":return money(value);
+      case "cost_purchase":return purchases?money(m.spend/purchases):"—";
+      case "roas":return m.spend?number(value/m.spend)+"x":"—";
+      default:return "—";
+    }
+  };
   return <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
     <div><h2 className="text-xl font-bold">Meta Ads — Gerenciador de anúncios</h2><p className="text-sm text-slate-500">Consulta de campanhas, conjuntos e anúncios · somente leitura.</p></div>
     <div className="grid gap-3 sm:grid-cols-2">
@@ -108,10 +151,11 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
           <button type="button" key={item.key} onClick={()=>setLevel(item.key)} className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${level===item.key?"bg-slate-950 text-white":"text-slate-700 hover:bg-white"}`}>{item.label}</button>
         )}
       </div>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm">
-        <thead><tr className="border-b"><th className="p-2">{level==="campaign"?"Campanha":level==="adset"?"Conjunto":"Anúncio"}</th><th className="p-2">Gasto</th><th className="p-2">Cliques</th><th className="p-2">Impressões</th></tr></thead>
-        <tbody>{report.map(row=><tr key={row.id} className="border-b"><td className="p-2">{row.name}</td><td className="p-2">{formatMoney(row.spend)}</td><td className="p-2">{row.clicks}</td><td className="p-2">{row.impressions}</td></tr>)}</tbody>
-      </table></div>
+      <div className="flex justify-end"><button type="button" onClick={()=>setConfigure(!configure)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold">Personalizar colunas</button></div>
+      {configure&&<div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3 lg:grid-cols-4">{columnOptions.map(c=><label key={c.key} className="flex items-center gap-2 text-xs font-medium"><input type="checkbox" checked={columns.includes(c.key)} onChange={e=>setColumn(c.key,e.target.checked)}/>{c.label}</label>)}</div>}
+      <p className="text-xs text-slate-500">Compras, checkouts e ROAS desta tabela são métricas atribuídas pela Meta, não as vendas confirmadas pela Vega. Alcance e frequência são exibidos apenas no nível de anúncio para evitar somas incorretas.</p>
+      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-2">{level==="campaign"?"Campanha":level==="adset"?"Conjunto":"Anúncio"}</th>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><th key={c.key} className="whitespace-nowrap p-2">{c.label}</th>)}</tr></thead>
+      <tbody>{report.map(row=><tr key={row.id} className="border-b"><td className="p-2">{row.name}</td>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><td key={c.key} className="whitespace-nowrap p-2">{metric(row,c.key)}</td>)}</tr>)}</tbody></table></div>
     </>}
   </section>;
 }
