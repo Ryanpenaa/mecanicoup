@@ -106,7 +106,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     const checkout=m.actions["omni_initiated_checkout"]??m.actions["initiate_checkout"]??0;
     const purchases=m.actions["omni_purchase"]??m.actions["purchase"]??0;
     const value=m.values["omni_purchase"]??m.values["purchase"]??0;
-    const money=(v:number)=>fxRate===null?formatMoney(v,currency==="UNKNOWN"?"USD":currency):formatMoney(v*fxRate,"BRL");
+    const money=(v:number)=>fxRate===null?currency==="UNKNOWN"?v.toFixed(2)+" (moeda não identificada)":formatMoney(v,currency):formatMoney(v*fxRate,"BRL");
     const number=(v:number)=>new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(v);
     switch(key){
       case "spend":return money(m.spend);
