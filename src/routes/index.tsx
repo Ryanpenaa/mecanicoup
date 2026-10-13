@@ -33,37 +33,86 @@ const DASHBOARD_ENDPOINT =
   "https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/tracking-dashboard";
 const STORAGE_KEY = "trackup_dashboard_key";
 const ADS_ENDPOINT = "https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/meta-ads-insights";
-type AdRow = {ad_id:string;ad_name:string;campaign_name:string;spend:string;clicks:string;impressions:string};
+type AdRow = {ad_id:string;ad_name:string;campaign_id:string;campaign_name:string;adset_id:string;adset_name:string;spend:string;clicks:string;impressions:string};
+type AdLevel = "campaign" | "adset" | "ad";
+type MetaAccount = {id:string;account_id:string;name:string;business?:{id:string;name:string}};
 function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
-  const [accounts,setAccounts]=useState<{id:string;account_id:string;name:string;business?:{id:string;name:string}}[]>([]);
+  const [accounts,setAccounts]=useState<MetaAccount[]>([]);
   const [selectedAccount,setSelectedAccount]=useState("");
-  const [selectedBm,setSelectedBm]=useState("all");
-  useEffect(()=>{
-    fetch(ADS_ENDPOINT+"?action=accounts",{headers:{"x-dashboard-key":dashboardKey}})
-      .then(r=>r.json()).then(d=>{if(d.ok)setAccounts(d.accounts||[]);}).catch(()=>{});
-  },[dashboardKey]);
+  const [selectedBm,setSelectedBm]=useState("");
+  const [level,setLevel]=useState<AdLevel>("campaign");
   const [rows,setRows]=useState<AdRow[]>([]);
-  const [message,setMessage]=useState("Clique em consultar para carregar os dados da Meta.");
+  const [message,setMessage]=useState("Selecione uma BM e uma conta de anúncios.");
   const [busy,setBusy]=useState(false);
+  useEffect(()=>{
+    let active=true;
+    fetch(ADS_ENDPOINT+"?action=accounts",{headers:{"x-dashboard-key":dashboardKey}})
+      .then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.detail||d.error||"Erro ao consultar contas.");return d;})
+      .then(d=>{if(active)setAccounts(d.accounts||[]);})
+      .catch(e=>{if(active)setMessage(e instanceof Error?e.message:"Erro ao consultar contas.");});
+    return ()=>{active=false;};
+  },[dashboardKey]);
+  const businesses=Array.from(new Map(accounts.filter(a=>a.business).map(a=>[a.business!.id,a.business!])).values());
+  const filtered=accounts.filter(a=>selectedBm==="unassigned"?!a.business:a.business?.id===selectedBm);
   const load=async()=>{
     setBusy(true);
+    setRows([]);
     try {
-      const res=await fetch(ADS_ENDPOINT+"?date="+encodeURIComponent(date)+"&account_id="+encodeURIComponent(selectedAccount),{headers:{"x-dashboard-key":dashboardKey}});
+      const url=ADS_ENDPOINT+"?date="+encodeURIComponent(date)+"&account_id="+encodeURIComponent(selectedAccount);
+      const res=await fetch(url,{headers:{"x-dashboard-key":dashboardKey}});
       const data=await res.json();
-      if(!res.ok){setMessage(data.error==="meta_ads_not_configured"?"Conexão pendente: configure o acesso de leitura da Meta no Supabase.":data.detail||data.error||"Falha na consulta.");setRows([]);}
-      else {setRows(data.ads||[]);setMessage((data.ads||[]).length+" anúncios encontrados para "+date);}
-    } catch {setMessage("Não foi possível consultar a Meta.");}
+      if(!res.ok)throw new Error(data.detail||data.error||"Falha na consulta.");
+      setRows(data.ads||[]);
+      setMessage((data.ads||[]).length+" anúncios encontrados em "+date+".");
+    } catch(e) {setMessage(e instanceof Error?e.message:"Não foi possível consultar a Meta.");}
     finally {setBusy(false);}
   };
+  const metrics=new Map<string,{id:string;name:string;spend:number;clicks:number;impressions:number}>();
+  for(const item of rows){
+    const id=level==="campaign"?item.campaign_id:level==="adset"?item.adset_id:item.ad_id;
+    const name=level==="campaign"?item.campaign_name:level==="adset"?item.adset_name:item.ad_name;
+    if(!id)continue;
+    const itemMetrics=metrics.get(id)||{id,name:name||id,spend:0,clicks:0,impressions:0};
+    itemMetrics.spend+=Number(item.spend)||0;
+    itemMetrics.clicks+=Number(item.clicks)||0;
+    itemMetrics.impressions+=Number(item.impressions)||0;
+    metrics.set(id,itemMetrics);
+  }
+  const report=Array.from(metrics.values()).sort((a,b)=>b.spend-a.spend);
   return <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Meta Ads — gastos por anúncio</h2><p className="text-sm text-slate-500">Somente leitura. Dados oficiais da Marketing API, quando conectada.</p></div>
-    <button type="button" disabled={busy||!selectedAccount} onClick={load} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?"Consultando...":"Consultar Meta Ads"}</button></div>
-    <div className="grid gap-3 sm:grid-cols-2"><select aria-label="Business Manager" className="rounded-lg border p-2" value={selectedBm} onChange={e=>{setSelectedBm(e.target.value);setSelectedAccount("");}}><option value="all">Todas as BMs</option>{Array.from(new Map(accounts.filter(a=>a.business).map(a=>[a.business!.id,a.business!])).values()).map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select><select aria-label="Conta de anúncios" className="rounded-lg border p-2" value={selectedAccount} onChange={e=>setSelectedAccount(e.target.value)}><option value="">Selecionar conta de anúncios</option>{accounts.filter(a=>selectedBm==="all"||a.business?.id===selectedBm).map(a=><option key={a.id} value={a.account_id}>{a.name}</option>)}</select></div><p className="text-sm text-slate-600">{message}</p>
-    {rows.length>0&&<div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-2">Anúncio</th><th className="p-2">Campanha</th><th className="p-2">Gasto</th><th className="p-2">Cliques</th><th className="p-2">Impressões</th></tr></thead>
-    <tbody>{rows.map(row=><tr key={row.ad_id} className="border-b"><td className="p-2">{row.ad_name}</td><td className="p-2">{row.campaign_name}</td><td className="p-2">{formatMoney(Number(row.spend))}</td><td className="p-2">{row.clicks}</td><td className="p-2">{row.impressions}</td></tr>)}</tbody></table></div>}
+    <div><h2 className="text-xl font-bold">Meta Ads — Gerenciador de anúncios</h2><p className="text-sm text-slate-500">Consulta de campanhas, conjuntos e anúncios · somente leitura.</p></div>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="text-sm font-semibold text-slate-700">Business Manager
+        <select aria-label="Business Manager" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedBm} onChange={e=>{setSelectedBm(e.target.value);setSelectedAccount("");setRows([]);}}>
+          <option value="">Escolha uma BM</option>
+          {businesses.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+          {accounts.some(a=>!a.business)&&<option value="unassigned">Contas sem BM vinculada</option>}
+        </select>
+      </label>
+      <label className="text-sm font-semibold text-slate-700">Conta de anúncios
+        <select aria-label="Conta de anúncios" disabled={!selectedBm} className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-50" value={selectedAccount} onChange={e=>{setSelectedAccount(e.target.value);setRows([]);}}>
+          <option value="">Escolha a conta de anúncios</option>
+          {filtered.map(a=><option key={a.id} value={a.account_id}>{a.name} ({a.account_id})</option>)}
+        </select>
+      </label>
+    </div>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="text-sm text-slate-600">{message}</p>
+      <button type="button" disabled={busy||!selectedAccount} onClick={load} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?"Consultando...":"Consultar Meta Ads"}</button>
+    </div>
+    {rows.length>0&&<>
+      <div className="flex gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+        {([{key:"campaign",label:"Campanhas"},{key:"adset",label:"Conjuntos"},{key:"ad",label:"Anúncios"}] as {key:AdLevel;label:string}[]).map(item=>
+          <button type="button" key={item.key} onClick={()=>setLevel(item.key)} className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${level===item.key?"bg-slate-950 text-white":"text-slate-700 hover:bg-white"}`}>{item.label}</button>
+        )}
+      </div>
+      <div className="overflow-x-auto"><table className="w-full text-left text-sm">
+        <thead><tr className="border-b"><th className="p-2">{level==="campaign"?"Campanha":level==="adset"?"Conjunto":"Anúncio"}</th><th className="p-2">Gasto</th><th className="p-2">Cliques</th><th className="p-2">Impressões</th></tr></thead>
+        <tbody>{report.map(row=><tr key={row.id} className="border-b"><td className="p-2">{row.name}</td><td className="p-2">{formatMoney(row.spend)}</td><td className="p-2">{row.clicks}</td><td className="p-2">{row.impressions}</td></tr>)}</tbody>
+      </table></div>
+    </>}
   </section>;
 }
-
 
 type FbcStatus = "ok" | "missing" | "mismatch" | "present";
 
