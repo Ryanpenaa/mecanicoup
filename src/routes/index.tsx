@@ -38,6 +38,8 @@ type AdLevel = "campaign" | "adset" | "ad";
 type MetaAccount = {id:string;account_id:string;name:string;business?:{id:string;name:string}};
 function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   const [accounts,setAccounts]=useState<MetaAccount[]>([]);
+  const [businesses,setBusinesses]=useState<{id:string;name:string}[]>([]);
+  const [loadingBms,setLoadingBms]=useState(true);
   const [selectedAccount,setSelectedAccount]=useState("");
   const [selectedBm,setSelectedBm]=useState("");
   const [level,setLevel]=useState<AdLevel>("campaign");
@@ -48,11 +50,11 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     let active=true;
     fetch(ADS_ENDPOINT+"?action=accounts",{headers:{"x-dashboard-key":dashboardKey}})
       .then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.detail||d.error||"Erro ao consultar contas.");return d;})
-      .then(d=>{if(active)setAccounts(d.accounts||[]);})
-      .catch(e=>{if(active)setMessage(e instanceof Error?e.message:"Erro ao consultar contas.");});
+      .then(d=>{if(active){setAccounts(d.accounts||[]);setBusinesses(d.businesses||[]);setLoadingBms(false);if(!(d.businesses||[]).length)setMessage("Nenhuma BM retornada. Confira as permissões do token na Meta.");}})
+      .catch(e=>{if(active){setLoadingBms(false);setMessage(e instanceof Error?e.message:"Erro ao consultar contas.");}});
     return ()=>{active=false;};
   },[dashboardKey]);
-  const businesses=Array.from(new Map(accounts.filter(a=>a.business).map(a=>[a.business!.id,a.business!])).values());
+
   const filtered=accounts.filter(a=>selectedBm==="unassigned"?!a.business:a.business?.id===selectedBm);
   const load=async()=>{
     setBusy(true);
@@ -84,7 +86,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold text-slate-700">Business Manager
         <select aria-label="Business Manager" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedBm} onChange={e=>{setSelectedBm(e.target.value);setSelectedAccount("");setRows([]);}}>
-          <option value="">Escolha uma BM</option>
+          <option value="">{loadingBms?"Carregando BMs...":"Escolha uma BM"}</option>
           {businesses.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
           {accounts.some(a=>!a.business)&&<option value="unassigned">Contas sem BM vinculada</option>}
         </select>
