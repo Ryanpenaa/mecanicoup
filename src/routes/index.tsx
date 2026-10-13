@@ -58,6 +58,9 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   const [rows,setRows]=useState<AdRow[]>([]);
   const [message,setMessage]=useState("Selecione uma BM e uma conta de anúncios.");
   const [busy,setBusy]=useState(false);
+  const [currency,setCurrency]=useState("BRL");
+  const [fxRate,setFxRate]=useState<number|null>(1);
+  const [fxDate,setFxDate]=useState<string|null>(null);
   useEffect(()=>{
     let active=true;
     fetch(ADS_ENDPOINT+"?action=accounts",{headers:{"x-dashboard-key":dashboardKey}})
@@ -76,6 +79,9 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
       const res=await fetch(url,{headers:{"x-dashboard-key":dashboardKey}});
       const data=await res.json();
       if(!res.ok)throw new Error(data.detail||data.error||"Falha na consulta.");
+      setCurrency(typeof data.currency==="string"?data.currency:"UNKNOWN");
+      setFxRate(typeof data.fx_rate_brl==="number"?data.fx_rate_brl:null);
+      setFxDate(data.fx_date||null);
       setRows(data.ads||[]);
       setMessage((data.ads||[]).length+" anúncios encontrados em "+date+".");
     } catch(e) {setMessage(e instanceof Error?e.message:"Não foi possível consultar a Meta.");}
@@ -100,7 +106,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     const checkout=m.actions["omni_initiated_checkout"]??m.actions["initiate_checkout"]??0;
     const purchases=m.actions["omni_purchase"]??m.actions["purchase"]??0;
     const value=m.values["omni_purchase"]??m.values["purchase"]??0;
-    const money=(v:number)=>formatMoney(v);
+    const money=(v:number)=>fxRate===null?formatMoney(v,currency==="UNKNOWN"?"USD":currency):formatMoney(v*fxRate,"BRL");
     const number=(v:number)=>new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(v);
     switch(key){
       case "spend":return money(m.spend);
@@ -146,6 +152,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
       <button type="button" disabled={busy||!selectedAccount} onClick={load} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?"Consultando...":"Consultar Meta Ads"}</button>
     </div>
     {rows.length>0&&<>
+      <p className="text-xs font-semibold text-slate-600">{fxRate===null?"Cotação indisponível: valores exibidos na moeda original ("+currency+"), sem conversão.":currency==="BRL"?"Conta em BRL: valores em reais, sem conversão.":"Valores convertidos de "+currency+" para BRL pela cotação de "+(fxDate||date)+" (1 "+currency+" = "+fxRate.toFixed(4)+" BRL). Cotação de referência; pode diferir da cobrança Meta."}</p>
       <div className="flex gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
         {([{key:"campaign",label:"Campanhas"},{key:"adset",label:"Conjuntos"},{key:"ad",label:"Anúncios"}] as {key:AdLevel;label:string}[]).map(item=>
           <button type="button" key={item.key} onClick={()=>setLevel(item.key)} className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${level===item.key?"bg-slate-950 text-white":"text-slate-700 hover:bg-white"}`}>{item.label}</button>
