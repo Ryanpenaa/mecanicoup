@@ -52,13 +52,16 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     {key:"ctr",label:"CTR (todos)"},{key:"link_ctr",label:"CTR no link"},{key:"cpm",label:"CPM"},
     {key:"landing_views",label:"Visualizações da página de destino"},{key:"cost_landing",label:"Custo por visualização"},
     {key:"initiate_checkout",label:"Checkouts iniciados"},{key:"purchases",label:"Compras (Meta)"},{key:"purchase_value",label:"Valor de compras (Meta)"},
-    {key:"cost_purchase",label:"Custo por compra"},{key:"roas",label:"ROAS (Meta)"}
+    {key:"cost_purchase",label:"Custo por compra"},{key:"roas",label:"ROAS (Meta)"},
+    {key:"trackup_purchases",label:"Compras (TrackUp)"},{key:"trackup_revenue",label:"Receita (TrackUp)"},{key:"trackup_cpa",label:"CPA (TrackUp)"},{key:"trackup_roas",label:"ROAS (TrackUp)"}
   ];
   const [columns,setColumns]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_columns")||"null");return Array.isArray(v)?v:["spend","impressions","clicks","cpc","ctr","landing_views","purchases"]; }catch{return ["spend","impressions","clicks","cpc","ctr","landing_views","purchases"];}});
   const [configure,setConfigure]=useState(false);
   const setColumn=(key:string,enabled:boolean)=>{const next=enabled?[...columns,key]:columns.filter(c=>c!==key);setColumns(next);try{localStorage.setItem("trackup_meta_columns",JSON.stringify(next));}catch{}};
 
   const [rows,setRows]=useState<AdRow[]>([]);
+  const [attribution,setAttribution]=useState<Record<string,{purchases:number;revenue_brl:number}>>({});
+  const [attributionSummary,setAttributionSummary]=useState<{approved:number;matched:number;unmatched:number;matched_revenue_brl:number;limited:boolean}|null>(null);
   const [message,setMessage]=useState("Selecione uma BM e uma conta de anúncios.");
   const [busy,setBusy]=useState(false);
   const [currency,setCurrency]=useState("BRL");
@@ -95,6 +98,8 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   const load=async()=>{
     setBusy(true);
     setRows([]);
+    setAttribution({});
+    setAttributionSummary(null);
     resetHierarchy();
     try {
       const url=ADS_ENDPOINT+"?date="+encodeURIComponent(date)+"&account_id="+encodeURIComponent(selectedAccount);
@@ -106,19 +111,23 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
       setFxDate(data.fx_date||null);
       setFxFallback(data.fx_fallback===true);
       setRows(data.ads||[]);
+      setAttribution(data.attribution||{});
+      setAttributionSummary(data.attribution_summary||null);
       setMessage((data.ads||[]).length+" anúncios encontrados em "+date+".");
     } catch(e) {setMessage(e instanceof Error?e.message:"Não foi possível consultar a Meta.");}
     finally {setBusy(false);}
   };
-  const metrics=new Map<string,{id:string;name:string;spend:number;clicks:number;impressions:number;link_clicks:number;reach:number;actions:Record<string,number>;values:Record<string,number>;count:number}>();
+  const metrics=new Map<string,{id:string;name:string;spend:number;clicks:number;impressions:number;link_clicks:number;reach:number;actions:Record<string,number>;values:Record<string,number>;trackupPurchases:number;trackupRevenue:number;count:number}>();
   const getAction=(obj:Record<string,number>,keys:string[])=>keys.reduce((sum,key)=>sum+(obj[key]||0),0);
   for(const item of scopedRows){
     const id=level==="campaign"?item.campaign_id:level==="adset"?item.adset_id:item.ad_id;
     const name=level==="campaign"?item.campaign_name:level==="adset"?item.adset_name:item.ad_name;
     if(!id)continue;
-    const m=metrics.get(id)||{id,name:name||id,spend:0,clicks:0,impressions:0,link_clicks:0,reach:0,actions:{},values:{},count:0};
+    const m=metrics.get(id)||{id,name:name||id,spend:0,clicks:0,impressions:0,link_clicks:0,reach:0,actions:{},values:{},trackupPurchases:0,trackupRevenue:0,count:0};
     m.spend+=Number(item.spend)||0;m.clicks+=Number(item.clicks)||0;m.impressions+=Number(item.impressions)||0;
     m.link_clicks+=Number(item.inline_link_clicks)||0;m.reach+=Number(item.reach)||0;m.count++;
+    m.trackupPurchases+=attribution[item.ad_id]?.purchases||0;
+    m.trackupRevenue+=attribution[item.ad_id]?.revenue_brl||0;
     for(const a of item.actions||[])m.actions[a.action_type]=(m.actions[a.action_type]||0)+(Number(a.value)||0);
     for(const a of item.action_values||[])m.values[a.action_type]=(m.values[a.action_type]||0)+(Number(a.value)||0);
     metrics.set(id,m);
@@ -150,6 +159,10 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
       case "purchase_value":return money(value);
       case "cost_purchase":return purchases?money(m.spend/purchases):"—";
       case "roas":return m.spend?number(value/m.spend)+"x":"—";
+      case "trackup_purchases":return number(m.trackupPurchases);
+      case "trackup_revenue":return formatMoney(m.trackupRevenue,"BRL");
+      case "trackup_cpa":return m.trackupPurchases&&fxRate!==null?formatMoney(m.spend*fxRate/m.trackupPurchases,"BRL"):"—";
+      case "trackup_roas":return m.spend&&fxRate!==null?number(m.trackupRevenue/(m.spend*fxRate))+"x":"—";
       default:return "—";
     }
   };
@@ -176,6 +189,11 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     </div>
     {rows.length>0&&<>
       <p className="text-xs font-semibold text-slate-600">{fxFallback?"Cotação automática indisponível: utilizando taxa provisória de US$ 1 = R$ 5,60.":fxRate===null?"Cotação indisponível: valores exibidos na moeda original ("+currency+"), sem conversão.":currency==="BRL"?"Conta em BRL: valores em reais, sem conversão.":"Valores convertidos de "+currency+" para BRL pela cotação de "+(fxDate||date)+" (1 "+currency+" = "+fxRate.toFixed(4)+" BRL). Cotação de referência; pode diferir da cobrança Meta."}</p>
+      {attributionSummary&&<div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+        <strong>Atribuição própria TrackUp (vendas aprovadas pela Vega)</strong>
+        <p>{attributionSummary.matched} vendas vinculadas aos anúncios desta consulta · {attributionSummary.unmatched} sem vínculo seguro · {attributionSummary.approved} vendas aprovadas no dia.</p>
+        <p className="mt-1 text-xs text-slate-500">Correspondência por ID do anúncio ou nome do anúncio + campanha. Data da aprovação em Rondônia; Meta usa o fuso da conta. Não são necessariamente vendas incrementais ou atribuídas pela Meta.{attributionSummary.limited?" Consulta parcial ou indisponível: verifique os dados.":""}</p>
+      </div>}
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm font-semibold text-slate-700">Filtrar campanha
           <select aria-label="Filtrar campanha" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedCampaign} onChange={e=>changeCampaign(e.target.value)}>
@@ -205,7 +223,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
       </div>
       <div className="flex justify-end"><button type="button" onClick={()=>setConfigure(!configure)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold">Personalizar colunas</button></div>
       {configure&&<div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3 lg:grid-cols-4">{columnOptions.map(c=><label key={c.key} className="flex items-center gap-2 text-xs font-medium"><input type="checkbox" checked={columns.includes(c.key)} onChange={e=>setColumn(c.key,e.target.checked)}/>{c.label}</label>)}</div>}
-      <p className="text-xs text-slate-500">Compras, checkouts e ROAS desta tabela são métricas atribuídas pela Meta, não as vendas confirmadas pela Vega. Alcance e frequência são exibidos apenas no nível de anúncio para evitar somas incorretas.</p>
+      <p className="text-xs text-slate-500">Compras, checkouts e ROAS desta tabela são métricas atribuídas pela Meta, não as vendas confirmadas pela Vega. Alcance e frequência são exibidos apenas no nível de anúncio para evitar somas incorretas. As colunas TrackUp dependem de UTMs rastreáveis e receita em BRL.</p>
       <div className="w-full max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-slate-100"><table className="min-w-max w-full text-left text-xs sm:text-sm"><thead><tr className="border-b"><th className="sticky left-0 z-10 min-w-40 bg-white p-2">{level==="campaign"?"Campanha":level==="adset"?"Conjunto":"Anúncio"}</th>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><th key={c.key} className="whitespace-nowrap p-2">{c.label}</th>)}</tr></thead>
       <tbody>{report.map(row=><tr key={row.id} className="border-b"><td className="sticky left-0 z-10 max-w-56 bg-white p-2">{level==="ad"?row.name:<button type="button" className="text-left font-semibold text-blue-700 hover:underline" onClick={()=>{if(level==="campaign")changeCampaign(row.id);else changeAdset(row.id);}}>{row.name}</button>}</td>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><td key={c.key} className="whitespace-nowrap p-2">{metric(row,c.key)}</td>)}</tr>)}</tbody></table></div>
     </>}
