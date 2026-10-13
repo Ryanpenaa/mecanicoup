@@ -64,6 +64,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   const [currency,setCurrency]=useState("BRL");
   const [fxRate,setFxRate]=useState<number|null>(1);
   const [fxDate,setFxDate]=useState<string|null>(null);
+  const [fxFallback,setFxFallback]=useState(false);
   useEffect(()=>{
     let active=true;
     fetch(ADS_ENDPOINT+"?action=accounts",{headers:{"x-dashboard-key":dashboardKey}})
@@ -103,6 +104,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
       setCurrency(typeof data.currency==="string"?data.currency:"UNKNOWN");
       setFxRate(typeof data.fx_rate_brl==="number"?data.fx_rate_brl:null);
       setFxDate(data.fx_date||null);
+      setFxFallback(data.fx_fallback===true);
       setRows(data.ads||[]);
       setMessage((data.ads||[]).length+" anúncios encontrados em "+date+".");
     } catch(e) {setMessage(e instanceof Error?e.message:"Não foi possível consultar a Meta.");}
@@ -151,18 +153,18 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
       default:return "—";
     }
   };
-  return <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+  return <section className="min-w-0 max-w-full space-y-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 sm:p-5">
     <div><h2 className="text-xl font-bold">Meta Ads — Gerenciador de anúncios</h2><p className="text-sm text-slate-500">Consulta de campanhas, conjuntos e anúncios · somente leitura.</p></div>
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold text-slate-700">Business Manager
-        <select aria-label="Business Manager" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedBm} onChange={e=>{setSelectedBm(e.target.value);setSelectedAccount("");setRows([]);resetHierarchy();}}>
+        <select aria-label="Business Manager" className="mt-1 block w-full min-w-0 max-w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedBm} onChange={e=>{setSelectedBm(e.target.value);setSelectedAccount("");setRows([]);resetHierarchy();}}>
           <option value="">{loadingBms?"Carregando BMs...":"Escolha uma BM"}</option>
           {businesses.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
           {accounts.some(a=>!a.business)&&<option value="unassigned">Contas sem BM vinculada</option>}
         </select>
       </label>
       <label className="text-sm font-semibold text-slate-700">Conta de anúncios
-        <select aria-label="Conta de anúncios" disabled={!selectedBm} className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-50" value={selectedAccount} onChange={e=>{setSelectedAccount(e.target.value);setRows([]);resetHierarchy();}}>
+        <select aria-label="Conta de anúncios" disabled={!selectedBm} className="mt-1 block w-full min-w-0 max-w-full rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-50" value={selectedAccount} onChange={e=>{setSelectedAccount(e.target.value);setRows([]);resetHierarchy();}}>
           <option value="">Escolha a conta de anúncios</option>
           {filtered.map(a=><option key={a.id} value={a.account_id}>{a.name} ({a.account_id})</option>)}
         </select>
@@ -173,7 +175,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
       <button type="button" disabled={busy||!selectedAccount} onClick={load} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?"Consultando...":"Consultar Meta Ads"}</button>
     </div>
     {rows.length>0&&<>
-      <p className="text-xs font-semibold text-slate-600">{fxRate===null?"Cotação indisponível: valores exibidos na moeda original ("+currency+"), sem conversão.":currency==="BRL"?"Conta em BRL: valores em reais, sem conversão.":"Valores convertidos de "+currency+" para BRL pela cotação de "+(fxDate||date)+" (1 "+currency+" = "+fxRate.toFixed(4)+" BRL). Cotação de referência; pode diferir da cobrança Meta."}</p>
+      <p className="text-xs font-semibold text-slate-600">{fxFallback?"Cotação automática indisponível: utilizando taxa provisória de US$ 1 = R$ 5,60.":fxRate===null?"Cotação indisponível: valores exibidos na moeda original ("+currency+"), sem conversão.":currency==="BRL"?"Conta em BRL: valores em reais, sem conversão.":"Valores convertidos de "+currency+" para BRL pela cotação de "+(fxDate||date)+" (1 "+currency+" = "+fxRate.toFixed(4)+" BRL). Cotação de referência; pode diferir da cobrança Meta."}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm font-semibold text-slate-700">Filtrar campanha
           <select aria-label="Filtrar campanha" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedCampaign} onChange={e=>changeCampaign(e.target.value)}>
@@ -196,16 +198,16 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
         <button type="button" onClick={goBack} disabled={level==="campaign"&&!selectedCampaign&&!selectedAdset} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 disabled:opacity-40">← Voltar um nível</button>
         <button type="button" onClick={resetHierarchy} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">Mostrar todas as campanhas</button>
       </div>
-      <div className="flex gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+      <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
         {([{key:"campaign",label:"Campanhas"},{key:"adset",label:"Conjuntos"},{key:"ad",label:"Anúncios"}] as {key:AdLevel;label:string}[]).map(item=>
-          <button type="button" key={item.key} onClick={()=>navigateLevel(item.key)} className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${level===item.key?"bg-slate-950 text-white":"text-slate-700 hover:bg-white"}`}>{item.label}</button>
+          <button type="button" key={item.key} onClick={()=>navigateLevel(item.key)} className={`min-w-0 rounded-lg px-1.5 py-2 text-xs font-bold sm:px-3 sm:text-sm ${level===item.key?"bg-slate-950 text-white":"text-slate-700 hover:bg-white"}`}>{item.label}</button>
         )}
       </div>
       <div className="flex justify-end"><button type="button" onClick={()=>setConfigure(!configure)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold">Personalizar colunas</button></div>
       {configure&&<div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3 lg:grid-cols-4">{columnOptions.map(c=><label key={c.key} className="flex items-center gap-2 text-xs font-medium"><input type="checkbox" checked={columns.includes(c.key)} onChange={e=>setColumn(c.key,e.target.checked)}/>{c.label}</label>)}</div>}
       <p className="text-xs text-slate-500">Compras, checkouts e ROAS desta tabela são métricas atribuídas pela Meta, não as vendas confirmadas pela Vega. Alcance e frequência são exibidos apenas no nível de anúncio para evitar somas incorretas.</p>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-2">{level==="campaign"?"Campanha":level==="adset"?"Conjunto":"Anúncio"}</th>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><th key={c.key} className="whitespace-nowrap p-2">{c.label}</th>)}</tr></thead>
-      <tbody>{report.map(row=><tr key={row.id} className="border-b"><td className="p-2">{level==="ad"?row.name:<button type="button" className="text-left font-semibold text-blue-700 hover:underline" onClick={()=>{if(level==="campaign")changeCampaign(row.id);else changeAdset(row.id);}}>{row.name}</button>}</td>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><td key={c.key} className="whitespace-nowrap p-2">{metric(row,c.key)}</td>)}</tr>)}</tbody></table></div>
+      <div className="w-full max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-slate-100"><table className="min-w-max w-full text-left text-xs sm:text-sm"><thead><tr className="border-b"><th className="sticky left-0 z-10 min-w-40 bg-white p-2">{level==="campaign"?"Campanha":level==="adset"?"Conjunto":"Anúncio"}</th>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><th key={c.key} className="whitespace-nowrap p-2">{c.label}</th>)}</tr></thead>
+      <tbody>{report.map(row=><tr key={row.id} className="border-b"><td className="sticky left-0 z-10 max-w-56 bg-white p-2">{level==="ad"?row.name:<button type="button" className="text-left font-semibold text-blue-700 hover:underline" onClick={()=>{if(level==="campaign")changeCampaign(row.id);else changeAdset(row.id);}}>{row.name}</button>}</td>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><td key={c.key} className="whitespace-nowrap p-2">{metric(row,c.key)}</td>)}</tr>)}</tbody></table></div>
     </>}
   </section>;
 }
