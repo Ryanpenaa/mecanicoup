@@ -97,9 +97,9 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   const report=Array.from(metrics.values()).sort((a,b)=>b.spend-a.spend);
   const metric=(m:typeof report[number],key:string):string=>{
     const landing=getAction(m.actions,["landing_page_view"]);
-    const checkout=getAction(m.actions,["initiate_checkout","omni_initiated_checkout"]);
-    const purchases=getAction(m.actions,["purchase","omni_purchase"]);
-    const value=getAction(m.values,["purchase","omni_purchase"]);
+    const checkout=m.actions["omni_initiated_checkout"]??m.actions["initiate_checkout"]??0;
+    const purchases=m.actions["omni_purchase"]??m.actions["purchase"]??0;
+    const value=m.values["omni_purchase"]??m.values["purchase"]??0;
     const money=(v:number)=>formatMoney(v);
     const number=(v:number)=>new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(v);
     switch(key){
