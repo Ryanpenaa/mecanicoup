@@ -77,7 +77,18 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   const campaigns=Array.from(new Map(rows.filter(r=>r.campaign_id).map(r=>[r.campaign_id,{id:r.campaign_id,name:r.campaign_name||r.campaign_id}])).values()).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
   const adsets=Array.from(new Map(rows.filter(r=>r.adset_id&&(!selectedCampaign||r.campaign_id===selectedCampaign)).map(r=>[r.adset_id,{id:r.adset_id,name:r.adset_name||r.adset_id}])).values()).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
   const scopedRows=rows.filter(r=>(!selectedCampaign||r.campaign_id===selectedCampaign)&&(!selectedAdset||r.adset_id===selectedAdset));
-  const changeCampaign=(id:string)=>{setSelectedCampaign(id);setSelectedAdset("");if(id)setLevel("adset");};
+  const changeCampaign=(id:string)=>{setSelectedCampaign(id);setSelectedAdset("");setLevel(id?"adset":"campaign");};
+  const changeAdset=(id:string)=>{setSelectedAdset(id);setLevel(id?"ad":"adset");};
+  const navigateLevel=(target:AdLevel)=>{
+    if(target==="campaign"){setSelectedCampaign("");setSelectedAdset("");}
+    else if(target==="adset"){setSelectedAdset("");}
+    setLevel(target);
+  };
+  const goBack=()=>{
+    if(level==="ad"){setSelectedAdset("");setLevel("adset");}
+    else if(level==="adset"){setSelectedCampaign("");setSelectedAdset("");setLevel("campaign");}
+    else {setSelectedCampaign("");setSelectedAdset("");}
+  };
   const resetHierarchy=()=>{setSelectedCampaign("");setSelectedAdset("");setLevel("campaign");};
 
   const load=async()=>{
@@ -171,7 +182,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
           </select>
         </label>
         <label className="text-sm font-semibold text-slate-700">Filtrar conjunto
-          <select aria-label="Filtrar conjunto" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedAdset} onChange={e=>{setSelectedAdset(e.target.value);if(e.target.value)setLevel("ad");}}>
+          <select aria-label="Filtrar conjunto" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedAdset} onChange={e=>changeAdset(e.target.value)}>
             <option value="">Todos os conjuntos{selectedCampaign?" da campanha":""}</option>
             {adsets.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -181,16 +192,20 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
         <span className="text-xs text-slate-500">{selectedCampaign?"Campanha filtrada":"Todas as campanhas"} · {selectedAdset?"Conjunto filtrado":"Todos os conjuntos"} · {scopedRows.length} anúncios no período</span>
         {(selectedCampaign||selectedAdset)&&<button type="button" className="rounded-lg border px-3 py-1.5 text-xs font-semibold" onClick={resetHierarchy}>Limpar filtros</button>}
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" onClick={goBack} disabled={level==="campaign"&&!selectedCampaign&&!selectedAdset} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 disabled:opacity-40">← Voltar um nível</button>
+        <button type="button" onClick={resetHierarchy} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800">Mostrar todas as campanhas</button>
+      </div>
       <div className="flex gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
         {([{key:"campaign",label:"Campanhas"},{key:"adset",label:"Conjuntos"},{key:"ad",label:"Anúncios"}] as {key:AdLevel;label:string}[]).map(item=>
-          <button type="button" key={item.key} onClick={()=>setLevel(item.key)} className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${level===item.key?"bg-slate-950 text-white":"text-slate-700 hover:bg-white"}`}>{item.label}</button>
+          <button type="button" key={item.key} onClick={()=>navigateLevel(item.key)} className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${level===item.key?"bg-slate-950 text-white":"text-slate-700 hover:bg-white"}`}>{item.label}</button>
         )}
       </div>
       <div className="flex justify-end"><button type="button" onClick={()=>setConfigure(!configure)} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold">Personalizar colunas</button></div>
       {configure&&<div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3 lg:grid-cols-4">{columnOptions.map(c=><label key={c.key} className="flex items-center gap-2 text-xs font-medium"><input type="checkbox" checked={columns.includes(c.key)} onChange={e=>setColumn(c.key,e.target.checked)}/>{c.label}</label>)}</div>}
       <p className="text-xs text-slate-500">Compras, checkouts e ROAS desta tabela são métricas atribuídas pela Meta, não as vendas confirmadas pela Vega. Alcance e frequência são exibidos apenas no nível de anúncio para evitar somas incorretas.</p>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-2">{level==="campaign"?"Campanha":level==="adset"?"Conjunto":"Anúncio"}</th>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><th key={c.key} className="whitespace-nowrap p-2">{c.label}</th>)}</tr></thead>
-      <tbody>{report.map(row=><tr key={row.id} className="border-b"><td className="p-2">{level==="ad"?row.name:<button type="button" className="text-left font-semibold text-blue-700 hover:underline" onClick={()=>{if(level==="campaign")changeCampaign(row.id);else {setSelectedAdset(row.id);setLevel("ad");}}}>{row.name}</button>}</td>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><td key={c.key} className="whitespace-nowrap p-2">{metric(row,c.key)}</td>)}</tr>)}</tbody></table></div>
+      <tbody>{report.map(row=><tr key={row.id} className="border-b"><td className="p-2">{level==="ad"?row.name:<button type="button" className="text-left font-semibold text-blue-700 hover:underline" onClick={()=>{if(level==="campaign")changeCampaign(row.id);else changeAdset(row.id);}}>{row.name}</button>}</td>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><td key={c.key} className="whitespace-nowrap p-2">{metric(row,c.key)}</td>)}</tr>)}</tbody></table></div>
     </>}
   </section>;
 }
