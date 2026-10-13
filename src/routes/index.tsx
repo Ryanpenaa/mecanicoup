@@ -43,6 +43,9 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   const [selectedAccount,setSelectedAccount]=useState("");
   const [selectedBm,setSelectedBm]=useState("");
   const [level,setLevel]=useState<AdLevel>("campaign");
+  const [selectedCampaign,setSelectedCampaign]=useState("");
+  const [selectedAdset,setSelectedAdset]=useState("");
+
   const columnOptions = [
     {key:"spend",label:"Gasto"},{key:"impressions",label:"Impressões"},{key:"reach",label:"Alcance"},{key:"frequency",label:"Frequência"},
     {key:"clicks",label:"Cliques (todos)"},{key:"link_clicks",label:"Cliques no link"},{key:"cpc",label:"CPC (todos)"},{key:"link_cpc",label:"CPC no link"},
@@ -71,9 +74,16 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   },[dashboardKey]);
 
   const filtered=accounts.filter(a=>selectedBm==="unassigned"?!a.business:a.business?.id===selectedBm);
+  const campaigns=Array.from(new Map(rows.filter(r=>r.campaign_id).map(r=>[r.campaign_id,{id:r.campaign_id,name:r.campaign_name||r.campaign_id}])).values()).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  const adsets=Array.from(new Map(rows.filter(r=>r.adset_id&&(!selectedCampaign||r.campaign_id===selectedCampaign)).map(r=>[r.adset_id,{id:r.adset_id,name:r.adset_name||r.adset_id}])).values()).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+  const scopedRows=rows.filter(r=>(!selectedCampaign||r.campaign_id===selectedCampaign)&&(!selectedAdset||r.adset_id===selectedAdset));
+  const changeCampaign=(id:string)=>{setSelectedCampaign(id);setSelectedAdset("");if(id)setLevel("adset");};
+  const resetHierarchy=()=>{setSelectedCampaign("");setSelectedAdset("");setLevel("campaign");};
+
   const load=async()=>{
     setBusy(true);
     setRows([]);
+    resetHierarchy();
     try {
       const url=ADS_ENDPOINT+"?date="+encodeURIComponent(date)+"&account_id="+encodeURIComponent(selectedAccount);
       const res=await fetch(url,{headers:{"x-dashboard-key":dashboardKey}});
@@ -89,7 +99,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   };
   const metrics=new Map<string,{id:string;name:string;spend:number;clicks:number;impressions:number;link_clicks:number;reach:number;actions:Record<string,number>;values:Record<string,number>;count:number}>();
   const getAction=(obj:Record<string,number>,keys:string[])=>keys.reduce((sum,key)=>sum+(obj[key]||0),0);
-  for(const item of rows){
+  for(const item of scopedRows){
     const id=level==="campaign"?item.campaign_id:level==="adset"?item.adset_id:item.ad_id;
     const name=level==="campaign"?item.campaign_name:level==="adset"?item.adset_name:item.ad_name;
     if(!id)continue;
@@ -134,14 +144,14 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     <div><h2 className="text-xl font-bold">Meta Ads — Gerenciador de anúncios</h2><p className="text-sm text-slate-500">Consulta de campanhas, conjuntos e anúncios · somente leitura.</p></div>
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold text-slate-700">Business Manager
-        <select aria-label="Business Manager" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedBm} onChange={e=>{setSelectedBm(e.target.value);setSelectedAccount("");setRows([]);}}>
+        <select aria-label="Business Manager" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedBm} onChange={e=>{setSelectedBm(e.target.value);setSelectedAccount("");setRows([]);resetHierarchy();}}>
           <option value="">{loadingBms?"Carregando BMs...":"Escolha uma BM"}</option>
           {businesses.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
           {accounts.some(a=>!a.business)&&<option value="unassigned">Contas sem BM vinculada</option>}
         </select>
       </label>
       <label className="text-sm font-semibold text-slate-700">Conta de anúncios
-        <select aria-label="Conta de anúncios" disabled={!selectedBm} className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-50" value={selectedAccount} onChange={e=>{setSelectedAccount(e.target.value);setRows([]);}}>
+        <select aria-label="Conta de anúncios" disabled={!selectedBm} className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2 disabled:opacity-50" value={selectedAccount} onChange={e=>{setSelectedAccount(e.target.value);setRows([]);resetHierarchy();}}>
           <option value="">Escolha a conta de anúncios</option>
           {filtered.map(a=><option key={a.id} value={a.account_id}>{a.name} ({a.account_id})</option>)}
         </select>
@@ -153,6 +163,24 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     </div>
     {rows.length>0&&<>
       <p className="text-xs font-semibold text-slate-600">{fxRate===null?"Cotação indisponível: valores exibidos na moeda original ("+currency+"), sem conversão.":currency==="BRL"?"Conta em BRL: valores em reais, sem conversão.":"Valores convertidos de "+currency+" para BRL pela cotação de "+(fxDate||date)+" (1 "+currency+" = "+fxRate.toFixed(4)+" BRL). Cotação de referência; pode diferir da cobrança Meta."}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-sm font-semibold text-slate-700">Filtrar campanha
+          <select aria-label="Filtrar campanha" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedCampaign} onChange={e=>changeCampaign(e.target.value)}>
+            <option value="">Todas as campanhas</option>
+            {campaigns.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <label className="text-sm font-semibold text-slate-700">Filtrar conjunto
+          <select aria-label="Filtrar conjunto" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedAdset} onChange={e=>{setSelectedAdset(e.target.value);if(e.target.value)setLevel("ad");}}>
+            <option value="">Todos os conjuntos{selectedCampaign?" da campanha":""}</option>
+            {adsets.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-slate-500">{selectedCampaign?"Campanha filtrada":"Todas as campanhas"} · {selectedAdset?"Conjunto filtrado":"Todos os conjuntos"} · {scopedRows.length} anúncios no período</span>
+        {(selectedCampaign||selectedAdset)&&<button type="button" className="rounded-lg border px-3 py-1.5 text-xs font-semibold" onClick={resetHierarchy}>Limpar filtros</button>}
+      </div>
       <div className="flex gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
         {([{key:"campaign",label:"Campanhas"},{key:"adset",label:"Conjuntos"},{key:"ad",label:"Anúncios"}] as {key:AdLevel;label:string}[]).map(item=>
           <button type="button" key={item.key} onClick={()=>setLevel(item.key)} className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${level===item.key?"bg-slate-950 text-white":"text-slate-700 hover:bg-white"}`}>{item.label}</button>
@@ -162,7 +190,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
       {configure&&<div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3 lg:grid-cols-4">{columnOptions.map(c=><label key={c.key} className="flex items-center gap-2 text-xs font-medium"><input type="checkbox" checked={columns.includes(c.key)} onChange={e=>setColumn(c.key,e.target.checked)}/>{c.label}</label>)}</div>}
       <p className="text-xs text-slate-500">Compras, checkouts e ROAS desta tabela são métricas atribuídas pela Meta, não as vendas confirmadas pela Vega. Alcance e frequência são exibidos apenas no nível de anúncio para evitar somas incorretas.</p>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="p-2">{level==="campaign"?"Campanha":level==="adset"?"Conjunto":"Anúncio"}</th>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><th key={c.key} className="whitespace-nowrap p-2">{c.label}</th>)}</tr></thead>
-      <tbody>{report.map(row=><tr key={row.id} className="border-b"><td className="p-2">{row.name}</td>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><td key={c.key} className="whitespace-nowrap p-2">{metric(row,c.key)}</td>)}</tr>)}</tbody></table></div>
+      <tbody>{report.map(row=><tr key={row.id} className="border-b"><td className="p-2">{level==="ad"?row.name:<button type="button" className="text-left font-semibold text-blue-700 hover:underline" onClick={()=>{if(level==="campaign")changeCampaign(row.id);else {setSelectedAdset(row.id);setLevel("ad");}}}>{row.name}</button>}</td>{columnOptions.filter(c=>columns.includes(c.key)).map(c=><td key={c.key} className="whitespace-nowrap p-2">{metric(row,c.key)}</td>)}</tr>)}</tbody></table></div>
     </>}
   </section>;
 }
