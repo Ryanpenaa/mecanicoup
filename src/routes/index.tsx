@@ -813,7 +813,7 @@ function Index() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="trackup-main mx-auto max-w-[1600px] space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex gap-3">
             <Eye className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
@@ -893,30 +893,32 @@ function Index() {
           </div>
         </section>
 
-        <div className="flex gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
+        <div role="tablist" aria-label="Áreas do TrackUp" className="trackup-tabs sticky top-0 z-30 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur-md">
           <button
             type="button"
+            role="tab" aria-selected={activeTab === "transactions"}
             onClick={() => setActiveTab("transactions")}
-            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+            className={`trackup-tab flex-1 rounded-xl px-4 py-3 text-sm font-bold transition ${
               activeTab === "transactions"
                 ? "bg-slate-950 text-white"
                 : "text-slate-600 hover:bg-slate-50"
             }`}
           >
-            Vendas / Webhooks
+            <span className="inline-flex items-center gap-2"><ShoppingCart className="h-4 w-4 shrink-0" /> Vendas / Webhooks</span>
           </button>
           <button
             type="button"
+            role="tab" aria-selected={activeTab === "traffic"}
             onClick={() => setActiveTab("traffic")}
-            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+            className={`trackup-tab flex-1 rounded-xl px-4 py-3 text-sm font-bold transition ${
               activeTab === "traffic"
                 ? "bg-slate-950 text-white"
                 : "text-slate-600 hover:bg-slate-50"
             }`}
           >
-            Qualidade do tráfego
+            <span className="inline-flex items-center gap-2"><Activity className="h-4 w-4 shrink-0" /> Qualidade do tráfego</span>
           </button>
-          <button type="button" onClick={() => setActiveTab("ads")} className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition ${activeTab === "ads" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}>Meta Ads</button>
+          <button type="button" role="tab" aria-selected={activeTab === "ads"} onClick={() => setActiveTab("ads")} className={`trackup-tab flex-1 rounded-xl px-4 py-3 text-sm font-bold transition ${activeTab === "ads" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}><span className="inline-flex items-center gap-2"><Gauge className="h-4 w-4 shrink-0" /> Meta Ads</span></button>
         </div>
 
         {activeTab === "ads" && <MetaAdsPanel dashboardKey={dashboardKey} date={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
