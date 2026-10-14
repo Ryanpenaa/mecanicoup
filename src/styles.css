@@ -142,3 +142,23 @@
     color: var(--color-foreground);
   }
 }
+
+/* TrackUp: melhorias progressivas de navegação e legibilidade. */
+.trackup-main { min-width: 0; }
+.trackup-main section { scroll-margin-top: 6rem; }
+.trackup-tabs { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+.trackup-tab { min-width: max-content; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+.trackup-tab[aria-selected="true"] { box-shadow: 0 5px 14px rgba(15,23,42,.16); }
+.trackup-tab:focus-visible { outline: 3px solid #34d399; outline-offset: 2px; }
+.trackup-main table tbody tr { transition: background-color .15s ease; }
+.trackup-main table tbody tr:hover td { background-color: #f1f5f9; }
+.trackup-main button { touch-action: manipulation; }
+@media (max-width: 640px) {
+  .trackup-tabs { margin-left: -0.25rem; margin-right: -0.25rem; }
+  .trackup-tab { flex: 0 0 auto; font-size: .8rem; }
+  .trackup-main section { border-radius: 1rem; }
+  .trackup-main input, .trackup-main select { max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trackup-main *, .trackup-tab { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+}
