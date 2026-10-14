@@ -65,6 +65,8 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
   ];
   const [columns,setColumns]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_columns")||"null");return Array.isArray(v)?v:["spend","impressions","clicks","cpc","ctr","landing_views","purchases","trackup_purchases","reconciled_purchases","attribution_source","trackup_roas"]; }catch{return ["spend","impressions","clicks","cpc","ctr","landing_views","purchases"];}});
   const [configure,setConfigure]=useState(false);
+  const [searchAds,setSearchAds]=useState("");
+  const [sortAds,setSortAds]=useState<"spend"|"purchases"|"roas"|"checkout">("spend");
   const setColumn=(key:string,enabled:boolean)=>{const next=enabled?[...columns,key]:columns.filter(c=>c!==key);setColumns(next);try{localStorage.setItem("trackup_meta_columns",JSON.stringify(next));}catch{}};
 
   const [rows,setRows]=useState<AdRow[]>([]);
@@ -151,7 +153,11 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
     for(const a of item.action_values||[])m.values[a.action_type]=(m.values[a.action_type]||0)+(Number(a.value)||0);
     metrics.set(id,m);
   }
-  const report=Array.from(metrics.values()).sort((a,b)=>b.spend-a.spend);
+  const report=Array.from(metrics.values()).filter(m => m.name.toLocaleLowerCase("pt-BR").includes(searchAds.trim().toLocaleLowerCase("pt-BR"))).sort((a,b)=>{
+    const purchase=(m:typeof metrics extends Map<string,infer T>?T:never)=>m.trackupPurchases || (m.actions["omni_purchase"] ?? m.actions["purchase"] ?? 0);
+    const rank=(m:typeof metrics extends Map<string,infer T>?T:never)=>sortAds==="purchases"?purchase(m):sortAds==="checkout"?(m.actions["omni_initiated_checkout"]??m.actions["initiate_checkout"]??0):sortAds==="roas"?(fxRate && m.spend?m.trackupRevenue/(m.spend*fxRate):0):m.spend;
+    return rank(b)-rank(a);
+  });
   const metric=(m:typeof report[number],key:string):string=>{
     const landing=getAction(m.actions,["landing_page_view"]);
     const checkout=m.actions["omni_initiated_checkout"]??m.actions["initiate_checkout"]??0;
@@ -246,6 +252,16 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
           <select aria-label="Filtrar conjunto" className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedAdset} onChange={e=>changeAdset(e.target.value)}>
             <option value="">Todos os conjuntos{selectedCampaign?" da campanha":""}</option>
             {adsets.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Buscar campanha, conjunto ou anúncio
+          <input value={searchAds} onChange={e=>setSearchAds(e.target.value)} placeholder="Pesquisar por nome..." className="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm" />
+        </label>
+        <label className="text-xs font-semibold text-slate-600">Ordenar resultados
+          <select value={sortAds} onChange={e=>setSortAds(e.target.value as typeof sortAds)} className="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm">
+            <option value="spend">Maior investimento</option><option value="purchases">Mais compras</option><option value="roas">Maior ROAS TrackUp</option><option value="checkout">Mais checkouts iniciados</option>
           </select>
         </label>
       </div>
@@ -632,6 +648,17 @@ function Index() {
     purchases: 0,
   });
   const [creativeQuality, setCreativeQuality] = useState<CreativeQuality[]>([]);
+  const [showHealthDetails,setShowHealthDetails]=useState(false);
+  const [searchSales,setSearchSales]=useState("");
+  const downloadCsv=()=>{
+    const fields:[string,(r:Transaction)=>unknown][]=[
+      ["Identificador",r=>r.sale_code??r.transaction_token],["Status",r=>r.status],["Produto",r=>r.product_name],["Valor",r=>r.value],["Moeda",r=>r.currency],["Aprovada em",r=>r.approved_at],["Campanha",r=>r.utm_campaign],["Criativo",r=>r.utm_content],["Tracking associado",r=>r.tracking_matched],["Enviado pelo TrackUp",r=>r.purchase_sent_by_trackup],["Erro Meta",r=>r.meta_purchase_error]
+    ];
+    const quote=(v:unknown)=>'"'+String(v??"").replace(/"/g,'""')+'"';
+    const csv="\uFEFF"+fields.map(([k])=>quote(k)).join(";")+"\r\n"+dayRows.map(r=>fields.map(([,get])=>quote(get(r))).join(";")).join("\r\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download="trackup-vendas-"+selectedDate+".csv";a.click();URL.revokeObjectURL(url);
+  };
 
   async function fetchDashboard(key: string, quiet = false) {
     if (!quiet) setRefreshing(true);
@@ -755,7 +782,8 @@ function Index() {
   const revenue = approved.reduce((sum, row) => sum + (row.value ?? 0), 0);
 
   const filteredRows = dayRows.filter((row) =>
-    statusFilter === "all" ? true : row.status === statusFilter,
+    (statusFilter === "all" || row.status === statusFilter) &&
+    (!searchSales.trim() || [row.sale_code,row.transaction_token,row.product_name,row.utm_campaign,row.utm_content].some(v=>String(v??"").toLocaleLowerCase("pt-BR").includes(searchSales.trim().toLocaleLowerCase("pt-BR")))),
   );
 
   if (!dashboardKey && !loading) {
@@ -893,6 +921,31 @@ function Index() {
           </div>
         </section>
 
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
+          {[
+            {label:"Faturamento aprovado",value:formatMoney(revenue),note:approved.length+" pagamentos aprovados",icon:ShoppingCart},
+            {label:"Vendas identificadas",value:String(approved.filter(r=>r.tracking_matched).length),note:"Com sessão de rastreamento",icon:CheckCircle2},
+            {label:"Envios pelo TrackUp",value:String(deliveredToMeta),note:"Marcados como enviados pelo sistema",icon:Zap},
+            {label:"Exigem atenção",value:String(approved.filter(r=>!r.tracking_matched||Boolean(r.meta_purchase_error)||r.fbc_status==="mismatch").length),note:"Sem identificação, erro ou FBC divergente",icon:AlertTriangle}
+          ].map(card=><div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-500"><span>{card.label}</span><card.icon className="h-4 w-4 text-emerald-600"/></div>
+            <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">{card.value}</p>
+            <p className="mt-1 text-xs text-slate-500">{card.note}</p>
+          </div>)}
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="font-bold text-slate-900">Saúde do rastreamento</h2><p className="text-xs text-slate-500">Diagnóstico baseado nas compras aprovadas da data selecionada</p></div>
+            <div className="flex gap-2"><button type="button" onClick={downloadCsv} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800">Exportar CSV</button><button type="button" onClick={()=>setShowHealthDetails(v=>!v)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold">{showHealthDetails?"Ocultar detalhes":"Ver detalhes"}</button></div>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{width:(approved.length?100*approved.filter(r=>r.tracking_matched).length/approved.length:0)+"%"}} /></div>
+          <p className="mt-2 text-xs text-slate-500">{approved.length?Math.round(100*approved.filter(r=>r.tracking_matched).length/approved.length)+"% das vendas aprovadas com tracking associado":"Sem vendas aprovadas nesta data"}. Isso não confirma atribuição no Gerenciador Meta.</p>
+          {showHealthDetails&&<div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 p-3">Sem sessão vinculada <strong className="block text-xl">{approved.filter(r=>!r.tracking_matched).length}</strong></div>
+            <div className="rounded-xl bg-slate-50 p-3">Erro reportado pela Meta <strong className="block text-xl">{approved.filter(r=>Boolean(r.meta_purchase_error)).length}</strong></div>
+            <div className="rounded-xl bg-slate-50 p-3">FBC divergente <strong className="block text-xl">{approved.filter(r=>r.fbc_status==="mismatch").length}</strong></div>
+          </div>}
+        </section>
         <div role="tablist" aria-label="Áreas do TrackUp" className="trackup-tabs sticky top-0 z-30 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur-md">
           <button
             type="button"
@@ -921,6 +974,10 @@ function Index() {
           <button type="button" role="tab" aria-selected={activeTab === "ads"} onClick={() => setActiveTab("ads")} className={`trackup-tab flex-1 rounded-xl px-4 py-3 text-sm font-bold transition ${activeTab === "ads" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}><span className="inline-flex items-center gap-2"><Gauge className="h-4 w-4 shrink-0" /> Meta Ads</span></button>
         </div>
 
+        {activeTab === "transactions" && <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
+          <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Buscar vendas por código, produto, campanha ou criativo<input type="search" value={searchSales} onChange={e=>setSearchSales(e.target.value)} placeholder="Pesquisar vendas..." className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /></label>
+          {searchSales&&<button type="button" className="rounded-lg border px-3 py-2 text-xs font-bold" onClick={()=>setSearchSales("")}>Limpar busca</button>}
+        </div>}
         {activeTab === "ads" && <MetaAdsPanel dashboardKey={dashboardKey} date={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
 
         {activeTab === "traffic" && (
