@@ -287,6 +287,16 @@ type Transaction = {
   meta_purchase_attempts: number;
   meta_purchase_last_attempt_at: string | null;
   meta_event_id: string | null;
+  meta_signal_audit?: {
+    tracking_matched: boolean;
+    fbc: boolean;
+    fbc_source: string;
+    fbp: boolean;
+    email: boolean;
+    phone: boolean;
+    ip: boolean;
+    user_agent: boolean;
+  } | null;
 };
 
 type TrafficSummary = {
@@ -705,6 +715,11 @@ function Index() {
 
   const approved = dayRows.filter((row) => row.status === "approved");
   const pending = dayRows.filter((row) => row.status === "pending");
+  const deliveredToMeta = approved.filter(row => row.purchase_sent_by_trackup).length;
+  const auditedPurchases = approved.filter(row => row.meta_signal_audit).length;
+  const sentFbc = approved.filter(row => row.meta_signal_audit?.fbc).length;
+  const sentFbp = approved.filter(row => row.meta_signal_audit?.fbp).length;
+  const idAttributedPurchases = approved.filter(row => /^\\d{12,20}$/.test(row.utm_content ?? "")).length;
   const problems = approved.filter(
     (row) =>
       (row.webhook_delay_seconds ?? 0) > 60 ||
@@ -1078,6 +1093,28 @@ function Index() {
             detail="Atraso > 60s, fbc divergente ou sessão sem vínculo"
             icon={AlertTriangle}
           />
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+          <h2 className="font-bold text-slate-900">Auditoria de sinais para Meta</h2>
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            Recebimento técnico pela Meta não é a mesma coisa que atribuição no Gerenciador de Anúncios.
+            Indicadores de FBC/FBP enviados são registrados somente para as novas compras após a correção.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[
+              ["CAPI aceita", `${deliveredToMeta}/${approved.length}`],
+              ["Enviou FBC", auditedPurchases ? `${sentFbc}/${auditedPurchases}` : "—"],
+              ["Enviou FBP", auditedPurchases ? `${sentFbp}/${auditedPurchases}` : "—"],
+              ["UTM com ID do anúncio", `${idAttributedPurchases}/${approved.length}`],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-slate-50 px-3 py-4">
+                <p className="text-xs font-semibold text-slate-600">{label}</p>
+                <p className="mt-2 text-lg font-bold tabular-nums text-slate-950">{value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-slate-500">UTM com ID numérico permite conciliação mais precisa por criativo. Os demais nomes continuam visíveis para análise, mas precisam de correspondência inequívoca.</p>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
