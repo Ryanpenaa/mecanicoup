@@ -802,15 +802,15 @@ function Index() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="border-b border-slate-800 bg-slate-950 text-white">
+    <div className="trackup-shell min-h-screen bg-slate-50 text-slate-950">
+      <header className="trackup-header border-b border-slate-800 bg-slate-950 text-white">
         <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-400 text-slate-950">
               <Gauge className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="font-bold tracking-tight">TrackUp</h1>
+              <h1 className="text-xl font-black tracking-tight">Track<span className="text-emerald-400">Up</span><span className="ml-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 align-middle text-[10px] font-bold uppercase tracking-[.2em] text-emerald-300">Analytics</span></h1>
               <p className="text-xs text-slate-400">
                 Vega/AppMax → Supabase → Meta CAPI
               </p>
@@ -842,6 +842,7 @@ function Index() {
       </header>
 
       <main className="trackup-main mx-auto max-w-[1600px] space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
+        <div className="trackup-hero"><div className="trackup-hero-glow" aria-hidden="true" /><div className="relative z-10"><p className="trackup-eyebrow">CENTRAL DE PERFORMANCE · TRACKUP</p><h2 className="mt-3 text-2xl font-black tracking-tight sm:text-4xl">Suas vendas, sob controle<span className="text-emerald-400">.</span></h2><p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">Analise campanhas, acompanhe pagamentos e encontre falhas de atribuição em um só lugar.</p><div className="mt-5 flex flex-wrap gap-2"><span className="trackup-hero-pill"><span className="trackup-pulse" /> Dados do checkout</span><span className="trackup-hero-pill">Meta Ads + TrackUp</span><span className="trackup-hero-pill">Fuso de Rondônia</span></div></div></div>
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex gap-3">
             <Eye className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
