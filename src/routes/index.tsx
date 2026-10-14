@@ -185,7 +185,7 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
   return <section className="min-w-0 max-w-full space-y-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 sm:p-5">
     <div><h2 className="text-xl font-bold">Meta Ads — Gerenciador de anúncios</h2><p className="text-sm text-slate-500">Consulta de campanhas, conjuntos e anúncios · somente leitura.</p></div>
     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
-      <strong>Vendas aprovadas no TrackUp hoje (todas as contas): {approvedCount} · {formatMoney(approvedRevenue,"BRL")}</strong>
+      <strong>Vendas aprovadas no TrackUp em {date} (todas as contas): {approvedCount} · {formatMoney(approvedRevenue,"BRL")}</strong>
       <p className="mt-1 text-xs text-emerald-900">Pagamentos confirmados pela Vega, sem depender da atribuição do Facebook. Os números desta faixa não são somados às compras da Meta e não representam vendas de uma conta selecionada.</p>
     </div>
     <div className="grid gap-3 sm:grid-cols-2">
