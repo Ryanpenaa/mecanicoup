@@ -719,7 +719,7 @@ function Index() {
   const auditedPurchases = approved.filter(row => row.meta_signal_audit).length;
   const sentFbc = approved.filter(row => row.meta_signal_audit?.fbc).length;
   const sentFbp = approved.filter(row => row.meta_signal_audit?.fbp).length;
-  const idAttributedPurchases = approved.filter(row => /^\\d{12,20}$/.test(row.utm_content ?? "")).length;
+  const idAttributedPurchases = approved.filter(row => /^\d{12,20}$/.test(row.utm_content ?? "")).length;
   const problems = approved.filter(
     (row) =>
       (row.webhook_delay_seconds ?? 0) > 60 ||
