@@ -36,7 +36,7 @@ const ADS_ENDPOINT = "https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/meta
 type AdRow = {ad_id:string;ad_name:string;campaign_id:string;campaign_name:string;adset_id:string;adset_name:string;spend:string;clicks:string;impressions:string;reach?:string;frequency?:string;inline_link_clicks?:string;actions?:{action_type:string;value:string}[];action_values?:{action_type:string;value:string}[]};
 type AdLevel = "campaign" | "adset" | "ad";
 type MetaAccount = {id:string;account_id:string;name:string;business?:{id:string;name:string}};
-function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
+function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboardKey:string;date:string;approvedCount:number;approvedRevenue:number}) {
   const [accounts,setAccounts]=useState<MetaAccount[]>([]);
   const [businesses,setBusinesses]=useState<{id:string;name:string}[]>([]);
   const [loadingBms,setLoadingBms]=useState(true);
@@ -95,12 +95,14 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   };
   const resetHierarchy=()=>{setSelectedCampaign("");setSelectedAdset("");setLevel("campaign");};
 
-  const load=async()=>{
-    setBusy(true);
-    setRows([]);
-    setAttribution({});
-    setAttributionSummary(null);
-    resetHierarchy();
+  const load=async(silent=false)=>{
+    if(!silent){
+      setBusy(true);
+      setRows([]);
+      setAttribution({});
+      setAttributionSummary(null);
+      resetHierarchy();
+    }
     try {
       const url=ADS_ENDPOINT+"?date="+encodeURIComponent(date)+"&account_id="+encodeURIComponent(selectedAccount);
       const res=await fetch(url,{headers:{"x-dashboard-key":dashboardKey}});
@@ -115,8 +117,14 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
       setAttributionSummary(data.attribution_summary||null);
       setMessage((data.ads||[]).length+" anúncios encontrados em "+date+".");
     } catch(e) {setMessage(e instanceof Error?e.message:"Não foi possível consultar a Meta.");}
-    finally {setBusy(false);}
+    finally {if(!silent)setBusy(false);}
   };
+  useEffect(()=>{
+    if(!selectedAccount)return;
+    void load();
+    const timer=window.setInterval(()=>{void load(true);},60000);
+    return ()=>window.clearInterval(timer);
+  },[selectedAccount,date,dashboardKey]);
   const metrics=new Map<string,{id:string;name:string;spend:number;clicks:number;impressions:number;link_clicks:number;reach:number;actions:Record<string,number>;values:Record<string,number>;trackupPurchases:number;trackupRevenue:number;count:number}>();
   const getAction=(obj:Record<string,number>,keys:string[])=>keys.reduce((sum,key)=>sum+(obj[key]||0),0);
   for(const item of scopedRows){
@@ -176,6 +184,10 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
   };
   return <section className="min-w-0 max-w-full space-y-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 sm:p-5">
     <div><h2 className="text-xl font-bold">Meta Ads — Gerenciador de anúncios</h2><p className="text-sm text-slate-500">Consulta de campanhas, conjuntos e anúncios · somente leitura.</p></div>
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+      <strong>Vendas aprovadas no TrackUp hoje (todas as contas): {approvedCount} · {formatMoney(approvedRevenue,"BRL")}</strong>
+      <p className="mt-1 text-xs text-emerald-900">Pagamentos confirmados pela Vega, sem depender da atribuição do Facebook. Os números desta faixa não são somados às compras da Meta e não representam vendas de uma conta selecionada.</p>
+    </div>
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold text-slate-700">Business Manager
         <select aria-label="Business Manager" className="mt-1 block w-full min-w-0 max-w-full rounded-lg border border-slate-200 bg-white p-2" value={selectedBm} onChange={e=>{setSelectedBm(e.target.value);setSelectedAccount("");setRows([]);resetHierarchy();}}>
@@ -193,7 +205,7 @@ function MetaAdsPanel({dashboardKey,date}:{dashboardKey:string;date:string}) {
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-sm text-slate-600">{message}</p>
-      <button type="button" disabled={busy||!selectedAccount} onClick={load} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?"Consultando...":"Consultar Meta Ads"}</button>
+      <button type="button" disabled={busy||!selectedAccount} onClick={()=>void load()} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?"Consultando...":"Consultar Meta Ads"}</button>
     </div>
     {rows.length>0&&<>
       <p className="text-xs font-semibold text-slate-600">{fxFallback?"Cotação automática indisponível: utilizando taxa provisória de US$ 1 = R$ 5,60.":fxRate===null?"Cotação indisponível: valores exibidos na moeda original ("+currency+"), sem conversão.":currency==="BRL"?"Conta em BRL: valores em reais, sem conversão.":"Valores convertidos de "+currency+" para BRL pela cotação de "+(fxDate||date)+" (1 "+currency+" = "+fxRate.toFixed(4)+" BRL). Cotação de referência; pode diferir da cobrança Meta."}</p>
@@ -875,7 +887,7 @@ function Index() {
           <button type="button" onClick={() => setActiveTab("ads")} className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition ${activeTab === "ads" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}>Meta Ads</button>
         </div>
 
-        {activeTab === "ads" && <MetaAdsPanel dashboardKey={dashboardKey} date={selectedDate} />}
+        {activeTab === "ads" && <MetaAdsPanel dashboardKey={dashboardKey} date={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
 
         {activeTab === "traffic" && (
           <>
