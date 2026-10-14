@@ -35,6 +35,14 @@ const STORAGE_KEY = "trackup_dashboard_key";
 const ADS_ENDPOINT = "https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/meta-ads-insights";
 type AdRow = {ad_id:string;ad_name:string;campaign_id:string;campaign_name:string;adset_id:string;adset_name:string;spend:string;clicks:string;impressions:string;reach?:string;frequency?:string;inline_link_clicks?:string;actions?:{action_type:string;value:string}[];action_values?:{action_type:string;value:string}[]};
 type AdLevel = "campaign" | "adset" | "ad";
+type PixelAudit = {
+  checked: boolean;
+  expected_pixel_id: string | null;
+  matching: number;
+  mismatching: {adset_id:string;name:string;pixel_id:string}[];
+  unknown: number;
+  note: string | null;
+};
 type MetaAccount = {id:string;account_id:string;name:string;business?:{id:string;name:string}};
 function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboardKey:string;date:string;approvedCount:number;approvedRevenue:number}) {
   const [accounts,setAccounts]=useState<MetaAccount[]>([]);
@@ -62,6 +70,7 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
   const [rows,setRows]=useState<AdRow[]>([]);
   const [attribution,setAttribution]=useState<Record<string,{purchases:number;revenue_brl:number}>>({});
   const [attributionSummary,setAttributionSummary]=useState<{approved:number;matched:number;unmatched:number;matched_revenue_brl:number;limited:boolean}|null>(null);
+  const [pixelAudit,setPixelAudit]=useState<PixelAudit|null>(null);
   const [message,setMessage]=useState("Selecione uma BM e uma conta de anúncios.");
   const [busy,setBusy]=useState(false);
   const [currency,setCurrency]=useState("BRL");
@@ -101,6 +110,7 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
       setRows([]);
       setAttribution({});
       setAttributionSummary(null);
+      setPixelAudit(null);
       resetHierarchy();
     }
     try {
@@ -115,6 +125,7 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
       setRows(data.ads||[]);
       setAttribution(data.attribution||{});
       setAttributionSummary(data.attribution_summary||null);
+      setPixelAudit(data.pixel_audit||null);
       setMessage((data.ads||[]).length+" anúncios encontrados em "+date+".");
     } catch(e) {setMessage(e instanceof Error?e.message:"Não foi possível consultar a Meta.");}
     finally {if(!silent)setBusy(false);}
@@ -213,6 +224,12 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
         <strong>Conciliação Meta + TrackUp</strong>
         <p className="mt-1 text-xs">As vendas da Meta são mantidas mesmo sem vínculo pelo TrackUp. Quando ambos indicam compras para o mesmo anúncio, mostramos o maior total — nunca somamos os dois. Isso evita soma duplicada, mas não prova se as vendas foram as mesmas. Os totais podem diferir por causa da janela de atribuição e da data.</p>
       </div>
+      {pixelAudit?.checked&&<div className={`rounded-xl border p-3 text-sm ${pixelAudit.mismatching.length?"border-red-200 bg-red-50 text-red-900":"border-slate-200 bg-slate-50 text-slate-700"}`}>
+        <strong>Verificação do Pixel nos conjuntos</strong>
+        <p className="mt-1 text-xs">Pixel de compras do TrackUp: {pixelAudit.expected_pixel_id||"não configurado"} · {pixelAudit.matching} conjuntos com Pixel correspondente · {pixelAudit.mismatching.length} divergentes · {pixelAudit.unknown} não verificáveis.</p>
+        {pixelAudit.mismatching.length>0&&<div className="mt-2 space-y-1 text-xs">{pixelAudit.mismatching.slice(0,8).map(a=><p key={a.adset_id}>{a.name} — Pixel do conjunto: {a.pixel_id}</p>)}</div>}
+      </div>}
+      {pixelAudit?.note&&<p className="text-xs text-amber-800">Auditoria do Pixel: {pixelAudit.note}</p>}
       {attributionSummary&&<div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
         <strong>Atribuição própria TrackUp (vendas aprovadas pela Vega)</strong>
         <p>{attributionSummary.matched} vendas vinculadas aos anúncios desta consulta · {attributionSummary.unmatched} sem vínculo seguro · {attributionSummary.approved} vendas aprovadas no dia.</p>
