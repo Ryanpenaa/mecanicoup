@@ -818,6 +818,7 @@ function Index() {
               </p>
             </div>
           </div>
+<div className="hidden min-w-[220px] px-3 sm:block"><div className="flex justify-between gap-3 text-xs font-bold"><span>Meta da oferta: R$ 100 mil</span><span>--%</span></div><div className="mt-2 h-2 rounded-full bg-white/20"/><p className="mt-1 text-[10px] text-slate-400">Aguardando faturamento historico</p></div>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -842,6 +843,7 @@ function Index() {
           </div>
         </div>
       </header>
+      <div className="bg-slate-950 px-4 pb-3 text-white sm:hidden"><div className="flex justify-between text-xs font-bold"><span>Meta da oferta: R$ 100 mil</span><span>--%</span></div><div className="mt-2 h-2 rounded-full bg-white/20"/></div>
 
       <div className="mx-auto flex max-w-[1920px] flex-col md:flex-row"><aside className="w-full shrink-0 border-b border-slate-200 bg-white p-3 md:w-56 md:border-r md:p-4"><nav aria-label="Menu principal" className="flex gap-2 overflow-x-auto md:flex-col">{([{id:"summary",name:"Resumo",icon:Gauge},{id:"ads",name:"Campanhas",icon:Activity},{id:"traffic",name:"Qualidade do tráfego",icon:Eye},{id:"transactions",name:"Vendas / Webhooks",icon:ShoppingCart}] as const).map(item=><button key={item.id} type="button" onClick={()=>setActiveTab(item.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-3 text-left text-sm font-bold md:w-full ${activeTab===item.id?"bg-blue-600 text-white":"text-slate-600 hover:bg-slate-100"}`}><item.icon className="h-4 w-4"/>{item.name}</button>)}</nav><p className="mt-8 hidden text-xs text-slate-400 md:block">TrackUp · PT-BR</p></aside><main className="trackup-main min-w-0 flex-1 space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold text-slate-500">Dashboard · {activeTab==="summary"?"Resumo":activeTab==="ads"?"Campanhas":activeTab==="traffic"?"Qualidade do tráfego":"Vendas / Webhooks"}</p><h2 className="text-xl font-extrabold">Central de resultados</h2></div><span className="text-xs font-semibold text-slate-500">Português (Brasil)</span></div><div className="mt-4 grid gap-5 md:grid-cols-2"><div><div className="flex justify-between text-xs font-bold"><span>Faturamento acumulado da oferta</span><span>Meta R$ 100 mil</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"></div><p className="mt-2 text-sm font-bold text-slate-600">Aguardando total histórico da oferta <span className="font-normal text-slate-500">• não confundir com vendas do dia</span></p></div><div><div className="flex justify-between text-xs font-bold"><span>Gastos acumulados em anúncios</span><span>Meta Ads</span></div><div className="mt-2 h-2 rounded-full bg-slate-100"/><p className="mt-2 text-xs text-slate-500">Histórico completo ainda não disponível para esta métrica.</p></div></div></section>
