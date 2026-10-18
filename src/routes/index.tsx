@@ -635,7 +635,9 @@ function Index() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("approved");
   const [selectedDate, setSelectedDate] = useState(() => todayDateKey());
-  const [activeTab, setActiveTab] = useState<"transactions" | "traffic" | "ads">("transactions");
+  const [activeTab, setActiveTab] = useState<"summary" | "transactions" | "traffic" | "ads">("summary");
+  const [visibleCards,setVisibleCards]=useState<string[]>(["Faturamento aprovado","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]);
+  const [editCards,setEditCards]=useState(false);
   const [trafficSummary, setTrafficSummary] = useState<TrafficSummary>({
     visits: 0,
     engaged_15s: 0,
@@ -841,8 +843,8 @@ function Index() {
         </div>
       </header>
 
-      <main className="trackup-main mx-auto max-w-[1600px] space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
-        <div className="trackup-hero"><div className="trackup-hero-glow" aria-hidden="true" /><div className="relative z-10"><p className="trackup-eyebrow">CENTRAL DE PERFORMANCE · TRACKUP</p><h2 className="mt-3 text-2xl font-black tracking-tight sm:text-4xl">Suas vendas, sob controle<span className="text-emerald-400">.</span></h2><p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">Analise campanhas, acompanhe pagamentos e encontre falhas de atribuição em um só lugar.</p><div className="mt-5 flex flex-wrap gap-2"><span className="trackup-hero-pill"><span className="trackup-pulse" /> Dados do checkout</span><span className="trackup-hero-pill">Meta Ads + TrackUp</span><span className="trackup-hero-pill">Fuso de Rondônia</span></div></div></div>
+      <div className="mx-auto flex max-w-[1920px] flex-col md:flex-row"><aside className="w-full shrink-0 border-b border-slate-200 bg-white p-3 md:w-56 md:border-r md:p-4"><nav aria-label="Menu principal" className="flex gap-2 overflow-x-auto md:flex-col">{([{id:"summary",name:"Resumo",icon:Gauge},{id:"ads",name:"Campanhas",icon:Activity},{id:"traffic",name:"Qualidade do tráfego",icon:Eye},{id:"transactions",name:"Vendas / Webhooks",icon:ShoppingCart}] as const).map(item=><button key={item.id} type="button" onClick={()=>setActiveTab(item.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-3 text-left text-sm font-bold md:w-full ${activeTab===item.id?"bg-blue-600 text-white":"text-slate-600 hover:bg-slate-100"}`}><item.icon className="h-4 w-4"/>{item.name}</button>)}</nav><p className="mt-8 hidden text-xs text-slate-400 md:block">TrackUp · PT-BR</p></aside><main className="trackup-main min-w-0 flex-1 space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold text-slate-500">Dashboard · {activeTab==="summary"?"Resumo":activeTab==="ads"?"Campanhas":activeTab==="traffic"?"Qualidade do tráfego":"Vendas / Webhooks"}</p><h2 className="text-xl font-extrabold">Central de resultados</h2></div><span className="text-xs font-semibold text-slate-500">Português (Brasil)</span></div><div className="mt-4 grid gap-5 md:grid-cols-2"><div><div className="flex justify-between text-xs font-bold"><span>Faturamento do dia</span><span>Meta R$ 100 mil</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600" style={{width:Math.min(100,revenue/100000*100)+"%"}}/></div><p className="mt-2 text-sm font-bold">{formatMoney(revenue)} <span className="font-normal text-slate-500">• somente data selecionada</span></p></div><div><div className="flex justify-between text-xs font-bold"><span>Gastos acumulados em anúncios</span><span>Meta Ads</span></div><div className="mt-2 h-2 rounded-full bg-slate-100"/><p className="mt-2 text-xs text-slate-500">Histórico completo ainda não disponível para esta métrica.</p></div></div></section>
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex gap-3">
             <Eye className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
@@ -922,13 +924,13 @@ function Index() {
           </div>
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
+        {activeTab==="summary"&&<div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3"><p className="text-sm font-bold">Visão geral · métricas da data selecionada</p><button type="button" onClick={()=>setEditCards(v=>!v)} className="rounded-lg border px-3 py-2 text-xs font-bold">{editCards?"Concluir":"Personalizar indicadores"}</button></div>{editCards&&<div className="flex flex-wrap gap-3 rounded-xl bg-white p-3">{["Faturamento aprovado","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"].map(label=><label key={label} className="flex gap-2 text-xs"><input type="checkbox" checked={visibleCards.includes(label)} onChange={()=>setVisibleCards(v=>v.includes(label)?v.filter(x=>x!==label):[...v,label])}/>{label}</label>)}</div>}        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
           {[
             {label:"Faturamento aprovado",value:formatMoney(revenue),note:approved.length+" pagamentos aprovados",icon:ShoppingCart},
             {label:"Vendas identificadas",value:String(approved.filter(r=>r.tracking_matched).length),note:"Com sessão de rastreamento",icon:CheckCircle2},
             {label:"Envios pelo TrackUp",value:String(deliveredToMeta),note:"Marcados como enviados pelo sistema",icon:Zap},
             {label:"Exigem atenção",value:String(approved.filter(r=>!r.tracking_matched||Boolean(r.meta_purchase_error)||r.fbc_status==="mismatch").length),note:"Sem identificação, erro ou FBC divergente",icon:AlertTriangle}
-          ].map(card=><div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
+          ].filter(card=>visibleCards.includes(card.label)).map(card=><div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
             <div className="flex items-center justify-between text-xs font-semibold text-slate-500"><span>{card.label}</span><card.icon className="h-4 w-4 text-emerald-600"/></div>
             <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">{card.value}</p>
             <p className="mt-1 text-xs text-slate-500">{card.note}</p>
@@ -947,34 +949,7 @@ function Index() {
             <div className="rounded-xl bg-slate-50 p-3">FBC divergente <strong className="block text-xl">{approved.filter(r=>r.fbc_status==="mismatch").length}</strong></div>
           </div>}
         </section>
-        <div role="tablist" aria-label="Áreas do TrackUp" className="trackup-tabs sticky top-0 z-30 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur-md">
-          <button
-            type="button"
-            role="tab" aria-selected={activeTab === "transactions"}
-            onClick={() => setActiveTab("transactions")}
-            className={`trackup-tab flex-1 rounded-xl px-4 py-3 text-sm font-bold transition ${
-              activeTab === "transactions"
-                ? "bg-slate-950 text-white"
-                : "text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            <span className="inline-flex items-center gap-2"><ShoppingCart className="h-4 w-4 shrink-0" /> Vendas / Webhooks</span>
-          </button>
-          <button
-            type="button"
-            role="tab" aria-selected={activeTab === "traffic"}
-            onClick={() => setActiveTab("traffic")}
-            className={`trackup-tab flex-1 rounded-xl px-4 py-3 text-sm font-bold transition ${
-              activeTab === "traffic"
-                ? "bg-slate-950 text-white"
-                : "text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            <span className="inline-flex items-center gap-2"><Activity className="h-4 w-4 shrink-0" /> Qualidade do tráfego</span>
-          </button>
-          <button type="button" role="tab" aria-selected={activeTab === "ads"} onClick={() => setActiveTab("ads")} className={`trackup-tab flex-1 rounded-xl px-4 py-3 text-sm font-bold transition ${activeTab === "ads" ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-50"}`}><span className="inline-flex items-center gap-2"><Gauge className="h-4 w-4 shrink-0" /> Meta Ads</span></button>
-        </div>
-
+        </div>}
         {activeTab === "transactions" && <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
           <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Buscar vendas por código, produto, campanha ou criativo<input type="search" value={searchSales} onChange={e=>setSearchSales(e.target.value)} placeholder="Pesquisar vendas..." className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /></label>
           {searchSales&&<button type="button" className="rounded-lg border px-3 py-2 text-xs font-bold" onClick={()=>setSearchSales("")}>Limpar busca</button>}
@@ -1498,7 +1473,7 @@ function Index() {
             {generatedAt ? ` · servidor: ${formatDate(generatedAt)}` : ""}
           </span>
         </footer>
-      </main>
+      </main></div>
       {dashboardKey && (
         <TrackUpChat
           dashboardKey={dashboardKey}
