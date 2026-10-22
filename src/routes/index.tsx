@@ -850,26 +850,45 @@ function Index() {
   const purchases=actions.omni_purchase??actions.purchase??0;
   const purchaseValue=values.omni_purchase??values.purchase??0;
   const money=(n:number)=>m?.currency&&Number.isFinite(n)?formatMoney(n,m.currency):"—";
+  // Multi-account totals can contain different currencies. Never add BRL and USD.
+  // Show financial KPIs grouped by currency instead of incorrectly hiding all spending.
+  const accountGroups=Object.entries((summaryMeta?.accounts||[]).reduce((groups:Record<string,any[]>,account:any)=>{
+    const code=String(account.currency||"UNKNOWN");
+    (groups[code]??=[]).push(account);
+    return groups;
+  },{} as Record<string,any[]>)) as [string,any[]][];
+  const perCurrency=(calc:(items:any[])=>number|null,suffix="")=>{
+    if(m?.currency)return null;
+    return accountGroups.map(([code,items])=>{
+      const result=calc(items);
+      if(result===null||!Number.isFinite(result))return null;
+      return suffix?code+": "+fmt(result)+suffix:formatMoney(result,code);
+    }).filter(Boolean).join(" · ")||"—";
+  };
+  const sumAccounts=(items:any[],field:string)=>items.reduce((total:number,item:any)=>total+Number(item[field]||0),0);
+  const sumAction=(items:any[],source:"actions"|"action_values",preferred:string,alternate:string)=>items.reduce((total:number,item:any)=>total+Number(item[source]?.[preferred]??item[source]?.[alternate]??0),0);
+  const currencyMoney=(calc:(items:any[])=>number|null,fallback:number)=>perCurrency(calc)||money(fallback);
+  const currencyRatio=(calc:(items:any[])=>number|null,fallback:number|null)=>perCurrency(calc,"x")||(fallback!==null?fmt(fallback)+"x":"—");
   const fmt=(n:number)=>new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(n);
   const metricCatalog=[
-    {key:"spend",title:"Gasto",value:money(m?.spend||0)},
+    {key:"spend",title:"Gasto",value:currencyMoney(items=>sumAccounts(items,"spend"),m?.spend||0)},
     {key:"impressions",title:"Impressões",value:fmt(m?.impressions||0)},
     {key:"reach",title:"Alcance",value:m?.reach==null?"—":fmt(m.reach)},
     {key:"frequency",title:"Frequência",value:m?.reach?fmt(m.impressions/m.reach):"—"},
     {key:"clicks",title:"Cliques (todos)",value:fmt(m?.clicks||0)},
     {key:"link_clicks",title:"Cliques no link",value:fmt(m?.link_clicks||0)},
-    {key:"cpc",title:"CPC",value:m?.clicks?money(m.spend/m.clicks):"—"},
-    {key:"cpc_link",title:"CPC no link",value:m?.link_clicks?money(m.spend/m.link_clicks):"—"},
+    {key:"cpc",title:"CPC",value:currencyMoney(items=>{const clicks=sumAccounts(items,"clicks");return clicks?sumAccounts(items,"spend")/clicks:null},m?.clicks?m.spend/m.clicks:NaN)},
+    {key:"cpc_link",title:"CPC no link",value:currencyMoney(items=>{const clicks=sumAccounts(items,"link_clicks");return clicks?sumAccounts(items,"spend")/clicks:null},m?.link_clicks?m.spend/m.link_clicks:NaN)},
     {key:"ctr",title:"CTR",value:m?.impressions?fmt(m.clicks/m.impressions*100)+"%":"—"},
     {key:"ctr_link",title:"CTR no link",value:m?.impressions?fmt(m.link_clicks/m.impressions*100)+"%":"—"},
-    {key:"cpm",title:"CPM",value:m?.impressions?money(m.spend/m.impressions*1000):"—"},
+    {key:"cpm",title:"CPM",value:currencyMoney(items=>{const count=sumAccounts(items,"impressions");return count?sumAccounts(items,"spend")/count*1000:null},m?.impressions?m.spend/m.impressions*1000:NaN)},
     {key:"landing",title:"Visualizações da página",value:fmt(actions.landing_page_view||0)},
-    {key:"cost_landing",title:"Custo por visualização",value:actions.landing_page_view?money(m.spend/actions.landing_page_view):"—"},
+    {key:"cost_landing",title:"Custo por visualização",value:currencyMoney(items=>{const views=sumAction(items,"actions","landing_page_view","landing_page_view");return views?sumAccounts(items,"spend")/views:null},actions.landing_page_view?m.spend/actions.landing_page_view:NaN)},
     {key:"checkouts",title:"Checkouts iniciados",value:fmt(checkouts)},
     {key:"purchases",title:"Compras (Meta)",value:fmt(purchases)},
-    {key:"purchase_value",title:"Valor de compras (Meta)",value:money(purchaseValue)},
-    {key:"cpa",title:"Custo por compra",value:purchases?money(m.spend/purchases):"—"},
-    {key:"roas",title:"ROAS (Meta)",value:m?.spend?fmt(purchaseValue/m.spend)+"x":"—"}
+    {key:"purchase_value",title:"Valor de compras (Meta)",value:currencyMoney(items=>sumAction(items,"action_values","omni_purchase","purchase"),purchaseValue)},
+    {key:"cpa",title:"Custo por compra",value:currencyMoney(items=>{const p=sumAction(items,"actions","omni_purchase","purchase");return p?sumAccounts(items,"spend")/p:null},purchases?m.spend/purchases:NaN)},
+    {key:"roas",title:"ROAS (Meta)",value:currencyRatio(items=>{const spend=sumAccounts(items,"spend");return spend?sumAction(items,"action_values","omni_purchase","purchase")/spend:null},m?.spend?purchaseValue/m.spend:null)}
   ];
 
   const filteredRows = dayRows.filter((row) =>
@@ -1045,6 +1064,7 @@ function Index() {
         </section>
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-base font-bold">Indicadores Meta Ads</h2><p className="text-xs text-slate-500">Conta e período selecionados no Resumo · personalize quais blocos aparecem</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={()=>setEditCards(true)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-blue-700">Escolher métricas</button><button type="button" onClick={()=>{const defaults=["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];setVisibleMetaCards(defaults);localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(defaults))}} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold">Restaurar padrão</button><span className="text-xs text-slate-500">{summaryMetaLoading?"Consultando Meta Ads...":summaryMetaError||(!m?"Selecione uma conta com dados":"Dados da API Meta")}</span></div></div>
+          {m&&!m.currency&&<p className="mt-3 text-xs text-amber-700">Contas em moedas diferentes: valores financeiros e custos são exibidos separadamente por moeda. Alcance e frequência não são somados entre contas; selecione uma conta para esses indicadores.</p>}
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{metricCatalog.filter(c=>visibleMetaCards.includes(c.key)).map(c=><div key={c.key} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"><p className="text-xs font-bold text-slate-500">{c.title}</p><p className="mt-3 text-2xl font-extrabold text-slate-950">{m?c.value:"—"}</p><p className="mt-1 text-[11px] text-slate-400">Meta Ads · {periodDays==="1"?"Hoje":periodDays+" dias"}</p></div>)}</div>
           {!visibleMetaCards.length&&<p className="mt-3 text-sm text-slate-500">Nenhuma métrica selecionada. Clique em Escolher métricas ou Restaurar padrão.</p>}
           {!m&&<p className="mt-3 text-xs text-amber-700">Sem resposta válida da Meta para a conta e período. Não foram inventados valores.</p>}
