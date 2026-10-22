@@ -895,17 +895,27 @@ function Index() {
   };
   const sumAccounts=(items:any[],field:string)=>items.reduce((total:number,item:any)=>total+Number(item[field]||0),0);
   const sumAction=(items:any[],source:"actions"|"action_values",preferred:string,alternate:string)=>items.reduce((total:number,item:any)=>total+Number(item[source]?.[preferred]??item[source]?.[alternate]??0),0);
+  const totalConverted=(get:(items:any[])=>number)=>{
+    let total=0;
+    for(const [code,items] of accountGroups){
+      const converted=toBRL(get(items),code);
+      if(converted===null)return null;
+      total+=converted;
+    }
+    return total;
+  };
   const currencyMoney=(calc:(items:any[])=>number|null,fallback:number)=>{
     if(!m?.currency&&accountGroups.length){
-      let total=0;
-      for(const [code,items] of accountGroups){
-        const value=calc(items);
-        if(value===null)return "—";
-        const converted=toBRL(value,code);
-        if(converted===null)return "—";
-        total+=converted;
-      }
-      return formatMoney(total,"BRL");
+      const total=totalConverted(items=>calc(items)??NaN);
+      return total===null?"—":formatMoney(total,"BRL");
+    }
+    return money(fallback);
+  };
+  const convertedCost=(denominator:(items:any[])=>number,fallback:number)=>{
+    if(!m?.currency&&accountGroups.length){
+      const spend=totalConverted(items=>sumAccounts(items,"spend"));
+      const units=accountGroups.reduce((total,[,items])=>total+denominator(items),0);
+      return spend!==null&&units>0?formatMoney(spend/units,"BRL"):"—";
     }
     return money(fallback);
   };
@@ -930,17 +940,17 @@ function Index() {
     {key:"frequency",title:"Frequência",value:m?.reach?fmt(m.impressions/m.reach):"—"},
     {key:"clicks",title:"Cliques (todos)",value:fmt(m?.clicks||0)},
     {key:"link_clicks",title:"Cliques no link",value:fmt(m?.link_clicks||0)},
-    {key:"cpc",title:"CPC",value:currencyMoney(items=>{const clicks=sumAccounts(items,"clicks");return clicks?sumAccounts(items,"spend")/clicks:null},m?.clicks?m.spend/m.clicks:NaN)},
-    {key:"cpc_link",title:"CPC no link",value:currencyMoney(items=>{const clicks=sumAccounts(items,"link_clicks");return clicks?sumAccounts(items,"spend")/clicks:null},m?.link_clicks?m.spend/m.link_clicks:NaN)},
+    {key:"cpc",title:"CPC",value:convertedCost(items=>sumAccounts(items,"clicks"),m?.clicks?m.spend/m.clicks:NaN)},
+    {key:"cpc_link",title:"CPC no link",value:convertedCost(items=>sumAccounts(items,"link_clicks"),m?.link_clicks?m.spend/m.link_clicks:NaN)},
     {key:"ctr",title:"CTR",value:m?.impressions?fmt(m.clicks/m.impressions*100)+"%":"—"},
     {key:"ctr_link",title:"CTR no link",value:m?.impressions?fmt(m.link_clicks/m.impressions*100)+"%":"—"},
-    {key:"cpm",title:"CPM",value:currencyMoney(items=>{const count=sumAccounts(items,"impressions");return count?sumAccounts(items,"spend")/count*1000:null},m?.impressions?m.spend/m.impressions*1000:NaN)},
+    {key:"cpm",title:"CPM",value:convertedCost(items=>sumAccounts(items,"impressions")/1000,m?.impressions?m.spend/m.impressions*1000:NaN)},
     {key:"landing",title:"Visualizações da página",value:fmt(actions.landing_page_view||0)},
-    {key:"cost_landing",title:"Custo por visualização",value:currencyMoney(items=>{const views=sumAction(items,"actions","landing_page_view","landing_page_view");return views?sumAccounts(items,"spend")/views:null},actions.landing_page_view?m.spend/actions.landing_page_view:NaN)},
+    {key:"cost_landing",title:"Custo por visualização",value:convertedCost(items=>sumAction(items,"actions","landing_page_view","landing_page_view"),actions.landing_page_view?m.spend/actions.landing_page_view:NaN)},
     {key:"checkouts",title:"Checkouts iniciados",value:fmt(checkouts)},
     {key:"purchases",title:"Compras (Meta)",value:fmt(purchases)},
     {key:"purchase_value",title:"Valor de compras (Meta)",value:currencyMoney(items=>sumAction(items,"action_values","omni_purchase","purchase"),purchaseValue)},
-    {key:"cpa",title:"Custo por compra",value:currencyMoney(items=>{const p=sumAction(items,"actions","omni_purchase","purchase");return p?sumAccounts(items,"spend")/p:null},purchases?m.spend/purchases:NaN)},
+    {key:"cpa",title:"Custo por compra",value:convertedCost(items=>sumAction(items,"actions","omni_purchase","purchase"),purchases?m.spend/purchases:NaN)},
     {key:"roas",title:"ROAS (Meta)",value:currencyRatio(items=>{const spend=sumAccounts(items,"spend");return spend?sumAction(items,"action_values","omni_purchase","purchase")/spend:null},m?.spend?purchaseValue/m.spend:null)}
   ];
 
