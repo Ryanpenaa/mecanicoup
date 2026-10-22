@@ -641,6 +641,11 @@ function Index() {
   const [visibleCards,setVisibleCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_summary_visible_v3")||"null");return Array.isArray(v)?v:["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}catch{return ["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}});
   const [editCards,setEditCards]=useState(false);
   const [selectedOffer,setSelectedOffer]=useState("all");
+  const [summaryAdAccount,setSummaryAdAccount]=useState("all");
+  const [summaryMeta,setSummaryMeta]=useState<any>(null);
+  const [summaryMetaError,setSummaryMetaError]=useState("");
+  const [visibleMetaCards,setVisibleMetaCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_summary_cards")||"null");return Array.isArray(v)?v:["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}catch{return ["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}});
+  const toggleMetaCard=(key:string)=>setVisibleMetaCards(v=>{const next=v.includes(key)?v.filter(x=>x!==key):[...v,key];localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(next));return next;});
   const [spendRange,setSpendRange]=useState("today");
   const [spendAccount,setSpendAccount]=useState("all");
   const [spendStart,setSpendStart]=useState("");
@@ -817,6 +822,16 @@ function Index() {
     },250);
     return()=>{active=false;clearTimeout(timer)};
   },[dashboardKey,selectedDate,spendRange,spendAccount,spendStart,spendEnd]);
+  useEffect(()=>{
+    if(!dashboardKey||activeTab!=="summary")return;
+    let live=true;
+    const args=new URLSearchParams({date:selectedDate,range:periodDays==="1"?"today":periodDays,account_id:summaryAdAccount});
+    fetch("https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/meta-spend-summary?"+args,{headers:{"x-dashboard-key":dashboardKey}})
+    .then(async r=>{const d=await r.json();if(!r.ok||!d.metrics)throw Error(d.detail||d.error||"Falha na consulta");return d})
+    .then(d=>{if(live){setSummaryMeta(d);setSummaryMetaError(d.partial?"Consulta parcial de contas":"");}})
+    .catch(e=>{if(live){setSummaryMeta(null);setSummaryMetaError(String(e.message||e));}});
+    return()=>{live=false};
+  },[dashboardKey,activeTab,selectedDate,periodDays,summaryAdAccount]);
   const revenue = approved.reduce((sum, row) => sum + (row.value ?? 0), 0);
   const totalGrossCents=financial?.global?.filter(v=>v.currency==="BRL").reduce((sum,v)=>sum+Number(v.approved_gross_cents||0),0)??null;
   const totalPercent=totalGrossCents===null?null:totalGrossCents/10000000*100;
@@ -824,6 +839,33 @@ function Index() {
   const chosenCents=selectedOffer==="all"?totalGrossCents:chosenOffer?.approved_gross_cents??null;
   const chosenPercent=chosenCents===null?null:Number(chosenCents)/10000000*100;
   const filteredDayApproved=approved.filter(r=>selectedOffer==="all"||r.product_key===selectedOffer);
+  const m=summaryMeta?.metrics;
+  const actions=m?.actions||{}, values=m?.action_values||{};
+  const checkouts=actions.omni_initiated_checkout??actions.initiate_checkout??0;
+  const purchases=actions.omni_purchase??actions.purchase??0;
+  const purchaseValue=values.omni_purchase??values.purchase??0;
+  const money=(n:number)=>m?.currency?formatMoney(n,m.currency):"—";
+  const fmt=(n:number)=>new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(n);
+  const metricCatalog=[
+    {key:"spend",title:"Gasto",value:money(m?.spend||0)},
+    {key:"impressions",title:"Impressões",value:fmt(m?.impressions||0)},
+    {key:"reach",title:"Alcance",value:m?.reach==null?"—":fmt(m.reach)},
+    {key:"frequency",title:"Frequência",value:m?.reach?fmt(m.impressions/m.reach):"—"},
+    {key:"clicks",title:"Cliques (todos)",value:fmt(m?.clicks||0)},
+    {key:"link_clicks",title:"Cliques no link",value:fmt(m?.link_clicks||0)},
+    {key:"cpc",title:"CPC",value:m?.clicks?money(m.spend/m.clicks):"—"},
+    {key:"cpc_link",title:"CPC no link",value:m?.link_clicks?money(m.spend/m.link_clicks):"—"},
+    {key:"ctr",title:"CTR",value:m?.impressions?fmt(m.clicks/m.impressions*100)+"%":"—"},
+    {key:"ctr_link",title:"CTR no link",value:m?.impressions?fmt(m.link_clicks/m.impressions*100)+"%":"—"},
+    {key:"cpm",title:"CPM",value:m?.impressions?money(m.spend/m.impressions*1000):"—"},
+    {key:"landing",title:"Visualizações da página",value:fmt(actions.landing_page_view||0)},
+    {key:"cost_landing",title:"Custo por visualização",value:actions.landing_page_view?money(m.spend/actions.landing_page_view):"—"},
+    {key:"checkouts",title:"Checkouts iniciados",value:fmt(checkouts)},
+    {key:"purchases",title:"Compras (Meta)",value:fmt(purchases)},
+    {key:"purchase_value",title:"Valor de compras (Meta)",value:money(purchaseValue)},
+    {key:"cpa",title:"Custo por compra",value:purchases?money(m.spend/purchases):"—"},
+    {key:"roas",title:"ROAS (Meta)",value:m?.spend?fmt(purchaseValue/m.spend)+"x":"—"}
+  ];
 
   const filteredRows = dayRows.filter((row) =>
     (statusFilter === "all" || row.status === statusFilter) &&
@@ -982,7 +1024,7 @@ function Index() {
           </div>
         </section>
 
-        {activeTab==="summary"&&<div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3"><p className="text-sm font-bold">Visão geral · indicadores diários e históricos</p><select aria-label="Período do funil" className="rounded-lg border p-2" value={periodDays} onChange={e=>setPeriodDays(e.target.value)}><option value="1">Hoje</option><option value="3">Últimos 3 dias</option><option value="7">Últimos 7 dias</option><option value="14">Últimos 14 dias</option><option value="30">Últimos 30 dias</option></select><select aria-label="Filtrar oferta" value={selectedOffer} onChange={e=>setSelectedOffer(e.target.value)} className="rounded-lg border p-2 text-xs"><option value="all">Todas as ofertas</option>{financial?.offers?.filter(o=>o.currency==="BRL").map(o=><option key={o.offer_key} value={o.offer_key}>{o.name}</option>)}</select><button type="button" onClick={()=>setEditCards(v=>!v)} className="rounded-lg border px-3 py-2 text-xs font-bold">{editCards?"Concluir":"Personalizar indicadores"}</button></div>{editCards&&<div className="flex flex-wrap gap-3 rounded-xl bg-white p-3"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showFunnel} onChange={e=>{setShowFunnel(e.target.checked);localStorage.setItem("trackup_show_funnel",String(e.target.checked))}}/>Mostrar funil</label>{["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"].map(label=><label key={label} className="flex gap-2 text-xs"><input type="checkbox" checked={visibleCards.includes(label)} onChange={()=>setVisibleCards(v=>{const next=v.includes(label)?v.filter(x=>x!==label):[...v,label];localStorage.setItem("trackup_summary_visible_v3",JSON.stringify(next));return next;})}/>{label}</label>)}</div>}        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
+        {activeTab==="summary"&&<div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3"><p className="text-sm font-bold">Visão geral · indicadores diários e históricos</p><select aria-label="Conta de anúncios do resumo" value={summaryAdAccount} onChange={e=>setSummaryAdAccount(e.target.value)} className="rounded-lg border p-2 text-xs"><option value="all">Todas as contas Meta</option>{spendAccounts.map(a=><option key={a.account_id} value={a.account_id}>{a.name}</option>)}</select><select aria-label="Período do funil" className="rounded-lg border p-2" value={periodDays} onChange={e=>setPeriodDays(e.target.value)}><option value="1">Hoje</option><option value="3">Últimos 3 dias</option><option value="7">Últimos 7 dias</option><option value="14">Últimos 14 dias</option><option value="30">Últimos 30 dias</option></select><select aria-label="Filtrar oferta" value={selectedOffer} onChange={e=>setSelectedOffer(e.target.value)} className="rounded-lg border p-2 text-xs"><option value="all">Todas as ofertas</option>{financial?.offers?.filter(o=>o.currency==="BRL").map(o=><option key={o.offer_key} value={o.offer_key}>{o.name}</option>)}</select><button type="button" onClick={()=>setEditCards(v=>!v)} className="rounded-lg border px-3 py-2 text-xs font-bold">{editCards?"Concluir":"Personalizar indicadores"}</button></div>{editCards&&<div className="flex flex-wrap gap-3 rounded-xl bg-white p-3"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showFunnel} onChange={e=>{setShowFunnel(e.target.checked);localStorage.setItem("trackup_show_funnel",String(e.target.checked))}}/>Mostrar funil</label>{["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"].map(label=><label key={label} className="flex gap-2 text-xs"><input type="checkbox" checked={visibleCards.includes(label)} onChange={()=>setVisibleCards(v=>{const next=v.includes(label)?v.filter(x=>x!==label):[...v,label];localStorage.setItem("trackup_summary_visible_v3",JSON.stringify(next));return next;})}/>{label}</label>)}<div className="w-full border-t pt-3"><p className="mb-2 text-xs font-bold text-slate-500">Métricas Meta Ads — marcar para exibir</p><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{metricCatalog.map(card=><label key={card.key} className="flex items-center gap-2 rounded-lg border p-2 text-xs"><input type="checkbox" checked={visibleMetaCards.includes(card.key)} onChange={()=>toggleMetaCard(card.key)}/>{card.title}</label>)}</div></div></div>}        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
           {[
             {label:"Faturamento histórico",value:chosenCents===null?"—":formatMoney(Number(chosenCents)/100),note:"Total acumulado de pagamentos aprovados",icon:ShoppingCart},
             {label:"Vendas aprovadas (histórico)",value:String(selectedOffer==="all"?(financial?.global?.find(g=>g.currency==="BRL")?.approved_orders??"—"):(chosenOffer?.approved_orders??"—")),note:"Pedidos registrados no financeiro",icon:CheckCircle2},
@@ -995,6 +1037,11 @@ function Index() {
             <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">{card.value}</p>
             <p className="mt-1 text-xs text-slate-500">{card.note}</p>
           </div>)}
+        </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-base font-bold">Indicadores Meta Ads</h2><p className="text-xs text-slate-500">Conta e período selecionados no Resumo · personalize quais blocos aparecem</p></div><span className="text-xs text-slate-500">{summaryMetaError||"Dados da API Meta"}</span></div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{metricCatalog.filter(c=>visibleMetaCards.includes(c.key)).map(c=><div key={c.key} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"><p className="text-xs font-bold text-slate-500">{c.title}</p><p className="mt-3 text-2xl font-extrabold text-slate-950">{m?c.value:"—"}</p><p className="mt-1 text-[11px] text-slate-400">Meta Ads · {periodDays==="1"?"Hoje":periodDays+" dias"}</p></div>)}</div>
+          {!m&&<p className="mt-3 text-xs text-amber-700">Sem resposta válida da Meta para a conta e período. Não foram inventados valores.</p>}
         </section>
         {showFunnel&&<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="text-lg font-bold">Funil de vendas · {periodDays} dias</h2>{periodMetrics?<div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-6">{([{key:"visits",label:"Visitas"},{key:"engaged_15s",label:"15 segundos"},{key:"view_plans",label:"Viu planos"},{key:"select_plan",label:"Selecionou plano"},{key:"checkout_click",label:"Clicou checkout"},{key:"approved",label:"Compras aprovadas"}] as const).map((x,i,arr)=>{const n=periodMetrics[x.key]||0;const prev=i?periodMetrics[arr[i-1].key]||0:n;return <div key={x.key} className="rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold">{x.label}</p><p className="mt-2 text-2xl font-black">{n}</p><div className="mt-3 flex h-20 items-end"><div className="w-full rounded-t bg-blue-500" style={{height:Math.max(3,Math.min(100,n/(periodMetrics.visits||1)*100))+"%"}}/></div><p className="mt-2 text-xs">{i&&prev?(n/prev*100).toFixed(1)+"%":"—"}</p></div>})}</div>:<p className="mt-3 text-xs">Dados do período não disponíveis.</p>}<p className="mt-3 text-xs text-slate-500">Taxas ilustrativas entre etapas; vendas não necessariamente pertencem à mesma coorte de visitas.</p></section>}
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
