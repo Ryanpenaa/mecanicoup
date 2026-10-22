@@ -638,8 +638,9 @@ function Index() {
   const [statusFilter, setStatusFilter] = useState("approved");
   const [selectedDate, setSelectedDate] = useState(() => todayDateKey());
   const [activeTab, setActiveTab] = useState<"summary" | "transactions" | "traffic" | "ads">("summary");
-  const [visibleCards,setVisibleCards]=useState<string[]>(["Faturamento aprovado","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]);
+  const [visibleCards,setVisibleCards]=useState<string[]>(["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]);
   const [editCards,setEditCards]=useState(false);
+  const [selectedOffer,setSelectedOffer]=useState("all");
   const [trafficSummary, setTrafficSummary] = useState<TrafficSummary>({
     visits: 0,
     engaged_15s: 0,
@@ -787,6 +788,10 @@ function Index() {
   const revenue = approved.reduce((sum, row) => sum + (row.value ?? 0), 0);
   const totalGrossCents=financial?.global?.filter(v=>v.currency==="BRL").reduce((sum,v)=>sum+Number(v.approved_gross_cents||0),0)??null;
   const totalPercent=totalGrossCents===null?null:totalGrossCents/10000000*100;
+  const chosenOffer=financial?.offers?.find(o=>o.offer_key===selectedOffer);
+  const chosenCents=selectedOffer==="all"?totalGrossCents:chosenOffer?.approved_gross_cents??null;
+  const chosenPercent=chosenCents===null?null:Number(chosenCents)/10000000*100;
+  const filteredDayApproved=approved.filter(r=>selectedOffer==="all"||r.product_key===selectedOffer);
 
   const filteredRows = dayRows.filter((row) =>
     (statusFilter === "all" || row.status === statusFilter) &&
@@ -931,12 +936,14 @@ function Index() {
           </div>
         </section>
 
-        {activeTab==="summary"&&<div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3"><p className="text-sm font-bold">Visão geral · métricas da data selecionada</p><button type="button" onClick={()=>setEditCards(v=>!v)} className="rounded-lg border px-3 py-2 text-xs font-bold">{editCards?"Concluir":"Personalizar indicadores"}</button></div>{editCards&&<div className="flex flex-wrap gap-3 rounded-xl bg-white p-3">{["Faturamento aprovado","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"].map(label=><label key={label} className="flex gap-2 text-xs"><input type="checkbox" checked={visibleCards.includes(label)} onChange={()=>setVisibleCards(v=>v.includes(label)?v.filter(x=>x!==label):[...v,label])}/>{label}</label>)}</div>}        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
+        {activeTab==="summary"&&<div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3"><p className="text-sm font-bold">Visão geral · indicadores diários e históricos</p><select aria-label="Filtrar oferta" value={selectedOffer} onChange={e=>setSelectedOffer(e.target.value)} className="rounded-lg border p-2 text-xs"><option value="all">Todas as ofertas</option>{financial?.offers?.filter(o=>o.currency==="BRL").map(o=><option key={o.offer_key} value={o.offer_key}>{o.name}</option>)}</select><button type="button" onClick={()=>setEditCards(v=>!v)} className="rounded-lg border px-3 py-2 text-xs font-bold">{editCards?"Concluir":"Personalizar indicadores"}</button></div>{editCards&&<div className="flex flex-wrap gap-3 rounded-xl bg-white p-3">{["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"].map(label=><label key={label} className="flex gap-2 text-xs"><input type="checkbox" checked={visibleCards.includes(label)} onChange={()=>setVisibleCards(v=>v.includes(label)?v.filter(x=>x!==label):[...v,label])}/>{label}</label>)}</div>}        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
           {[
-            {label:"Faturamento aprovado",value:formatMoney(revenue),note:approved.length+" pagamentos aprovados",icon:ShoppingCart},
-            {label:"Vendas identificadas",value:String(approved.filter(r=>r.tracking_matched).length),note:"Com sessão de rastreamento",icon:CheckCircle2},
-            {label:"Envios pelo TrackUp",value:String(deliveredToMeta),note:"Marcados como enviados pelo sistema",icon:Zap},
-            {label:"Exigem atenção",value:String(approved.filter(r=>!r.tracking_matched||Boolean(r.meta_purchase_error)||r.fbc_status==="mismatch").length),note:"Sem identificação, erro ou FBC divergente",icon:AlertTriangle}
+            {label:"Faturamento histórico",value:chosenCents===null?"—":formatMoney(Number(chosenCents)/100),note:"Total acumulado de pagamentos aprovados",icon:ShoppingCart},
+            {label:"Vendas aprovadas (histórico)",value:String(selectedOffer==="all"?(financial?.global?.find(g=>g.currency==="BRL")?.approved_orders??"—"):(chosenOffer?.approved_orders??"—")),note:"Pedidos registrados no financeiro",icon:CheckCircle2},
+            {label:"Faturamento do dia",value:formatMoney(filteredDayApproved.reduce((v,r)=>v+(r.value??0),0)),note:"Somente a data selecionada",icon:CalendarDays},
+            {label:"Vendas identificadas",value:String(filteredDayApproved.filter(r=>r.tracking_matched).length),note:"Com sessão de rastreamento",icon:CheckCircle2},
+            {label:"Envios pelo TrackUp",value:String(filteredDayApproved.filter(r=>r.purchase_sent_by_trackup).length),note:"Marcados como enviados pelo sistema",icon:Zap},
+            {label:"Exigem atenção",value:String(filteredDayApproved.filter(r=>!r.tracking_matched||Boolean(r.meta_purchase_error)||r.fbc_status==="mismatch").length),note:"Sem identificação, erro ou FBC divergente",icon:AlertTriangle}
           ].filter(card=>visibleCards.includes(card.label)).map(card=><div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
             <div className="flex items-center justify-between text-xs font-semibold text-slate-500"><span>{card.label}</span><card.icon className="h-4 w-4 text-emerald-600"/></div>
             <p className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950">{card.value}</p>
