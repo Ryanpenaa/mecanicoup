@@ -677,10 +677,10 @@ function Index() {
   const [spendLoading,setSpendLoading]=useState(false);
   const [periodDays,setPeriodDays]=useState("7");
   const [periodMetrics,setPeriodMetrics]=useState<Record<string,number>|null>(null);
-  const [showFunnel,setShowFunnel]=useState(()=>localStorage.getItem("trackup_show_funnel")!=="false");
+  const [showFunnel,setShowFunnel]=useState(()=>{try{return typeof window==="undefined"?true:localStorage.getItem("trackup_show_funnel")!=="false"}catch{return true}});
   const [funnelMode,setFunnelMode]=useState("general");
-  const [showPayments,setShowPayments]=useState(()=>localStorage.getItem("trackup_show_payments")!=="false");
-  const [showOffersPie,setShowOffersPie]=useState(()=>localStorage.getItem("trackup_show_offers_pie")!=="false");
+  const [showPayments,setShowPayments]=useState(()=>{try{return typeof window==="undefined"?true:localStorage.getItem("trackup_show_payments")!=="false"}catch{return true}});
+  const [showOffersPie,setShowOffersPie]=useState(()=>{try{return typeof window==="undefined"?true:localStorage.getItem("trackup_show_offers_pie")!=="false"}catch{return true}});
   const [periodDetail,setPeriodDetail]=useState<any>(null);
   const [trafficSummary, setTrafficSummary] = useState<TrafficSummary>({
     visits: 0,
