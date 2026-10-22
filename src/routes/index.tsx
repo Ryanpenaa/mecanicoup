@@ -645,6 +645,26 @@ function Index() {
   const [summaryMeta,setSummaryMeta]=useState<any>(null);
   const [summaryMetaError,setSummaryMetaError]=useState("");
   const [summaryMetaLoading,setSummaryMetaLoading]=useState(false);
+  const [brlRates,setBrlRates]=useState<Record<string,number>>({});
+  // Reference rates by currency and report end date; never silently invent an exchange rate.
+  useEffect(()=>{
+    const currencies=new Set<string>();
+    for(const a of summaryMeta?.accounts||[])if(a.currency&&a.currency!=="BRL")currencies.add(a.currency);
+    for(const c of Object.keys(spendData?.by_currency||{}))if(c!=="BRL")currencies.add(c);
+    let active=true;
+    Promise.all([...currencies].map(async code=>{
+      const day=summaryMeta?.accounts?.some((a:any)=>a.currency===code)?selectedDate:(spendData?.until||selectedDate);
+      const key=code+"_"+day;
+      if(brlRates[key])return;
+      try {
+        const result=await fetch("https://api.frankfurter.dev/v1/"+encodeURIComponent(day)+"?"+new URLSearchParams({base:code,symbols:"BRL"}));
+        if(!result.ok)throw Error("FX unavailable");
+        const data=await result.json();
+        if(active&&Number(data?.rates?.BRL)>0)setBrlRates(v=>({...v,[key]:Number(data.rates.BRL)}));
+      }catch {/* Unavailable means blank, not an invented conversion. */}
+    }));
+    return()=>{active=false};
+  },[summaryMeta,spendData,selectedDate]);
   const [visibleMetaCards,setVisibleMetaCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_summary_cards")||"null");return Array.isArray(v)&&v.length?v:["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}catch{return ["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}});
   const toggleMetaCard=(key:string)=>setVisibleMetaCards(v=>{const next=v.includes(key)?v.filter(x=>x!==key):[...v,key];localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(next));return next;});
   const [spendRange,setSpendRange]=useState("today");
@@ -849,7 +869,13 @@ function Index() {
   const checkouts=actions.omni_initiated_checkout??actions.initiate_checkout??0;
   const purchases=actions.omni_purchase??actions.purchase??0;
   const purchaseValue=values.omni_purchase??values.purchase??0;
-  const money=(n:number)=>m?.currency&&Number.isFinite(n)?formatMoney(n,m.currency):"—";
+  const toBRL=(amount:number,currency:string,day=selectedDate)=>{
+    if(!Number.isFinite(amount))return null;
+    if(currency==="BRL")return amount;
+    const rate=brlRates[currency+"_"+day];
+    return rate>0?amount*rate:null;
+  };
+  const money=(n:number)=>m?.currency&&toBRL(n,m.currency)!==null?formatMoney(toBRL(n,m.currency)!,"BRL"):"—";
   // Multi-account totals can contain different currencies. Never add BRL and USD.
   // Show financial KPIs grouped by currency instead of incorrectly hiding all spending.
   const accountGroups=Object.entries((summaryMeta?.accounts||[]).reduce((groups:Record<string,any[]>,account:any)=>{
@@ -862,13 +888,40 @@ function Index() {
     return accountGroups.map(([code,items])=>{
       const result=calc(items);
       if(result===null||!Number.isFinite(result))return null;
-      return suffix?code+": "+fmt(result)+suffix:formatMoney(result,code);
+      if(suffix)return code+": "+fmt(result)+suffix;
+      const converted=toBRL(result,code,selectedDate);
+      return converted===null?code+": cotação indisponível":formatMoney(converted,"BRL");
     }).filter(Boolean).join(" · ")||"—";
   };
   const sumAccounts=(items:any[],field:string)=>items.reduce((total:number,item:any)=>total+Number(item[field]||0),0);
   const sumAction=(items:any[],source:"actions"|"action_values",preferred:string,alternate:string)=>items.reduce((total:number,item:any)=>total+Number(item[source]?.[preferred]??item[source]?.[alternate]??0),0);
-  const currencyMoney=(calc:(items:any[])=>number|null,fallback:number)=>perCurrency(calc)||money(fallback);
-  const currencyRatio=(calc:(items:any[])=>number|null,fallback:number|null)=>perCurrency(calc,"x")||(fallback!==null?fmt(fallback)+"x":"—");
+  const currencyMoney=(calc:(items:any[])=>number|null,fallback:number)=>{
+    if(!m?.currency&&accountGroups.length){
+      let total=0;
+      for(const [code,items] of accountGroups){
+        const value=calc(items);
+        if(value===null)return "—";
+        const converted=toBRL(value,code);
+        if(converted===null)return "—";
+        total+=converted;
+      }
+      return formatMoney(total,"BRL");
+    }
+    return money(fallback);
+  };
+  const currencyRatio=(calc:(items:any[])=>number|null,fallback:number|null)=>{
+    if(!m?.currency&&accountGroups.length){
+      let totalSpend=0,totalRevenue=0;
+      for(const [code,items] of accountGroups){
+        const spend=toBRL(sumAccounts(items,"spend"),code);
+        const value=toBRL(sumAction(items,"action_values","omni_purchase","purchase"),code);
+        if(spend===null||value===null)return "—";
+        totalSpend+=spend;totalRevenue+=value;
+      }
+      return totalSpend?fmt(totalRevenue/totalSpend)+"x":"—";
+    }
+    return fallback!==null?fmt(fallback)+"x":"—";
+  };
   const fmt=(n:number)=>new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(n);
   const metricCatalog=[
     {key:"spend",title:"Gasto",value:currencyMoney(items=>sumAccounts(items,"spend"),m?.spend||0)},
@@ -929,7 +982,7 @@ function Index() {
 <div className="hidden min-w-[220px] px-3 sm:block"><div className="flex justify-between gap-3 text-xs font-bold"><span>Meta da oferta: R$ 100 mil</span><span>{totalPercent===null?"—":totalPercent.toLocaleString("pt-BR",{maximumFractionDigits:2})+"%"}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-emerald-400" style={{width:Math.min(100,Math.max(0,totalPercent??0))+"%"}}/></div><p className="mt-1 text-[10px] text-slate-400">{totalGrossCents===null?"Aguardando total histórico":formatMoney(totalGrossCents/100)+" acumulados (todas as ofertas registradas)"}</p></div>
           <div className="min-w-[180px] border-l border-white/15 px-4">
  <div className="flex items-center gap-1.5"><p className="text-[11px] font-bold text-slate-300">Gasto em anúncios</p><select aria-label="Período do gasto" title="Selecionar período do gasto" value={spendRange} onChange={e=>setSpendRange(e.target.value)} className="max-w-[110px] cursor-pointer bg-transparent text-[10px] text-emerald-300 outline-none"><option className="text-slate-900" value="today">Hoje</option><option className="text-slate-900" value="yesterday">Ontem</option><option className="text-slate-900" value="3">3 dias</option><option className="text-slate-900" value="7">7 dias</option><option className="text-slate-900" value="14">14 dias</option><option className="text-slate-900" value="30">30 dias</option><option className="text-slate-900" value="this_month">Este mês</option><option className="text-slate-900" value="all">Acumulado</option><option className="text-slate-900" value="custom">Personalizado</option></select></div>
- <p className="mt-1 text-lg font-extrabold text-white">{spendLoading?"Atualizando...":spendData?Object.entries(spendData.by_currency).map(([currency,amount])=>formatMoney(amount,currency)).join(" · ")||"Sem gastos": "—"}</p>
+ <p className="mt-1 text-lg font-extrabold text-white">{spendLoading?"Atualizando...":spendData?Object.entries(spendData.by_currency).map(([currency,amount])=>{const value=toBRL(amount,currency,spendData.until);return value===null?"Cotação de "+currency+" indisponível":formatMoney(value,"BRL")}).join(" · ")||"Sem gastos": "—"}</p>
  <select aria-label="Conta de anúncios para o gasto" title="Filtrar conta" value={spendAccount} onChange={e=>setSpendAccount(e.target.value)} className="max-w-[210px] cursor-pointer bg-transparent text-[10px] text-slate-300 outline-none"><option className="text-slate-900" value="all">Todas as contas</option>{spendAccounts.map(a=><option className="text-slate-900" key={a.account_id} value={a.account_id}>{a.name}</option>)}</select>
  {spendRange==="custom"&&<div className="mt-1 flex flex-wrap gap-1"><input aria-label="Gasto a partir de" type="date" value={spendStart} onChange={e=>setSpendStart(e.target.value)} className="w-[122px] rounded bg-slate-800 p-1 text-[10px]"/><input aria-label="Gasto até" type="date" value={spendEnd} onChange={e=>setSpendEnd(e.target.value)} className="w-[122px] rounded bg-slate-800 p-1 text-[10px]"/></div>}
  {spendError&&<p className="mt-1 text-[10px] text-rose-300">{spendError}</p>}
@@ -1064,7 +1117,7 @@ function Index() {
         </section>
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-base font-bold">Indicadores Meta Ads</h2><p className="text-xs text-slate-500">Conta e período selecionados no Resumo · personalize quais blocos aparecem</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={()=>setEditCards(true)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-blue-700">Escolher métricas</button><button type="button" onClick={()=>{const defaults=["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];setVisibleMetaCards(defaults);localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(defaults))}} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold">Restaurar padrão</button><span className="text-xs text-slate-500">{summaryMetaLoading?"Consultando Meta Ads...":summaryMetaError||(!m?"Selecione uma conta com dados":"Dados da API Meta")}</span></div></div>
-          {m&&!m.currency&&<p className="mt-3 text-xs text-amber-700">Contas em moedas diferentes: valores financeiros e custos são exibidos separadamente por moeda. Alcance e frequência não são somados entre contas; selecione uma conta para esses indicadores.</p>}
+          {m&&<p className="mt-3 text-xs text-slate-500">Indicadores financeiros convertidos para BRL pela cotação de referência em {selectedDate}. Em períodos de vários dias, a conversão usa a cotação da data final e pode diferir do total liquidado. ROAS é calculado sobre os valores convertidos. Alcance entre contas não é deduplicado.</p>}
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{metricCatalog.filter(c=>visibleMetaCards.includes(c.key)).map(c=><div key={c.key} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"><p className="text-xs font-bold text-slate-500">{c.title}</p><p className="mt-3 text-2xl font-extrabold text-slate-950">{m?c.value:"—"}</p><p className="mt-1 text-[11px] text-slate-400">Meta Ads · {periodDays==="1"?"Hoje":periodDays+" dias"}</p></div>)}</div>
           {!visibleMetaCards.length&&<p className="mt-3 text-sm text-slate-500">Nenhuma métrica selecionada. Clique em Escolher métricas ou Restaurar padrão.</p>}
           {!m&&<p className="mt-3 text-xs text-amber-700">Sem resposta válida da Meta para a conta e período. Não foram inventados valores.</p>}
