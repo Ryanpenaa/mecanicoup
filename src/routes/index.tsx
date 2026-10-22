@@ -645,7 +645,7 @@ function Index() {
   const [summaryMeta,setSummaryMeta]=useState<any>(null);
   const [summaryMetaError,setSummaryMetaError]=useState("");
   const [summaryMetaLoading,setSummaryMetaLoading]=useState(false);
-  const [visibleMetaCards,setVisibleMetaCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_summary_cards")||"null");return Array.isArray(v)?v:["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}catch{return ["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}});
+  const [visibleMetaCards,setVisibleMetaCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_summary_cards")||"null");return Array.isArray(v)&&v.length?v:["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}catch{return ["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}});
   const toggleMetaCard=(key:string)=>setVisibleMetaCards(v=>{const next=v.includes(key)?v.filter(x=>x!==key):[...v,key];localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(next));return next;});
   const [spendRange,setSpendRange]=useState("today");
   const [spendAccount,setSpendAccount]=useState("all");
@@ -1044,8 +1044,9 @@ function Index() {
           </div>)}
         </section>
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-base font-bold">Indicadores Meta Ads</h2><p className="text-xs text-slate-500">Conta e período selecionados no Resumo · personalize quais blocos aparecem</p></div><span className="text-xs text-slate-500">{summaryMetaLoading?"Consultando Meta Ads...":summaryMetaError||(!m?"Selecione uma conta com dados":"Dados da API Meta")}</span></div>
+          <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-base font-bold">Indicadores Meta Ads</h2><p className="text-xs text-slate-500">Conta e período selecionados no Resumo · personalize quais blocos aparecem</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={()=>setEditCards(true)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-blue-700">Escolher métricas</button><button type="button" onClick={()=>{const defaults=["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];setVisibleMetaCards(defaults);localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(defaults))}} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold">Restaurar padrão</button><span className="text-xs text-slate-500">{summaryMetaLoading?"Consultando Meta Ads...":summaryMetaError||(!m?"Selecione uma conta com dados":"Dados da API Meta")}</span></div></div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{metricCatalog.filter(c=>visibleMetaCards.includes(c.key)).map(c=><div key={c.key} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"><p className="text-xs font-bold text-slate-500">{c.title}</p><p className="mt-3 text-2xl font-extrabold text-slate-950">{m?c.value:"—"}</p><p className="mt-1 text-[11px] text-slate-400">Meta Ads · {periodDays==="1"?"Hoje":periodDays+" dias"}</p></div>)}</div>
+          {!visibleMetaCards.length&&<p className="mt-3 text-sm text-slate-500">Nenhuma métrica selecionada. Clique em Escolher métricas ou Restaurar padrão.</p>}
           {!m&&<p className="mt-3 text-xs text-amber-700">Sem resposta válida da Meta para a conta e período. Não foram inventados valores.</p>}
         </section>
         {showFunnel&&<section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
