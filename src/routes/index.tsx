@@ -646,6 +646,16 @@ function Index() {
   const [summaryMetaError,setSummaryMetaError]=useState("");
   const [summaryMetaLoading,setSummaryMetaLoading]=useState(false);
   const [brlRates,setBrlRates]=useState<Record<string,number>>({});
+  const [visibleMetaCards,setVisibleMetaCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_summary_cards")||"null");return Array.isArray(v)&&v.length?v:["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}catch{return ["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}});
+  const toggleMetaCard=(key:string)=>setVisibleMetaCards(v=>{const next=v.includes(key)?v.filter(x=>x!==key):[...v,key];localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(next));return next;});
+  const [spendRange,setSpendRange]=useState("today");
+  const [spendAccount,setSpendAccount]=useState("all");
+  const [spendStart,setSpendStart]=useState("");
+  const [spendEnd,setSpendEnd]=useState("");
+  const [spendAccounts,setSpendAccounts]=useState<Array<{account_id:string;name:string}>>([]);
+  const [spendData,setSpendData]=useState<{by_currency:Record<string,number>;partial:boolean;since:string;until:string}|null>(null);
+  const [spendError,setSpendError]=useState("");
+  const [spendLoading,setSpendLoading]=useState(false);
   // Reference rates by currency and report end date; never silently invent an exchange rate.
   useEffect(()=>{
     const currencies=new Set<string>();
@@ -665,16 +675,7 @@ function Index() {
     }));
     return()=>{active=false};
   },[summaryMeta,spendData,selectedDate]);
-  const [visibleMetaCards,setVisibleMetaCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_summary_cards")||"null");return Array.isArray(v)&&v.length?v:["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}catch{return ["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}});
-  const toggleMetaCard=(key:string)=>setVisibleMetaCards(v=>{const next=v.includes(key)?v.filter(x=>x!==key):[...v,key];localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(next));return next;});
-  const [spendRange,setSpendRange]=useState("today");
-  const [spendAccount,setSpendAccount]=useState("all");
-  const [spendStart,setSpendStart]=useState("");
-  const [spendEnd,setSpendEnd]=useState("");
-  const [spendAccounts,setSpendAccounts]=useState<Array<{account_id:string;name:string}>>([]);
-  const [spendData,setSpendData]=useState<{by_currency:Record<string,number>;partial:boolean;since:string;until:string}|null>(null);
-  const [spendError,setSpendError]=useState("");
-  const [spendLoading,setSpendLoading]=useState(false);
+
   const [periodDays,setPeriodDays]=useState("7");
   const [periodMetrics,setPeriodMetrics]=useState<Record<string,number>|null>(null);
   const [showFunnel,setShowFunnel]=useState(()=>{try{return typeof window==="undefined"?true:localStorage.getItem("trackup_show_funnel")!=="false"}catch{return true}});
