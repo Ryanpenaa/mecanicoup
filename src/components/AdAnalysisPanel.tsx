@@ -6,7 +6,7 @@ type Day = {date:string;spend:number;clicks:number;link_clicks:number;impression
 type Account = {account_id:string;name:string;business?:{id:string;name:string}|null;currency:string};
 type Ad = {account_id:string;ad_id:string;ad_name:string;campaign_name:string;adset_name:string;effective_status:string;days:Day[]};
 type Report = {ok:boolean;date:string;generated_at:string;accounts:Account[];ads:Ad[];attribution:{approved:number;matched:number;unmatched:number;limited:boolean};warnings:string[];recorded?:boolean;slot?:string;attribution_failed?:boolean};
-type Snapshot = {review_date:string;slot:string;captured_at:string;payload:Report};
+type Snapshot = {review_date:string;slot:string;captured_at:string;payload?:Report;totals?:{spend:number;sales:number;metaSales:number;checkouts:number}};
 type Metrics = {spend:number;clicks:number;linkClicks:number;impressions:number;checkouts:number;metaSales:number;trackupSales:number;revenue:number;cpc:number;ctr:number;roas:number|null};
 const WINDOWS=[{id:"manha",name:"Manhã",range:"06h–07h",start:6,end:7},{id:"tarde",name:"Tarde",range:"12h–13h",start:12,end:13},{id:"noite",name:"Noite",range:"18h–20h",start:18,end:20}];
 const PERIODS=[1,3,7,15,30];
@@ -48,8 +48,9 @@ function evaluation(m:Metrics,period:number,unreliable:boolean){
 const toneClass:Record<string,string>={green:"bg-emerald-50 text-emerald-800 border-emerald-200",red:"bg-rose-50 text-rose-800 border-rose-200",amber:"bg-amber-50 text-amber-800 border-amber-200",blue:"bg-blue-50 text-blue-800 border-blue-200",slate:"bg-slate-100 text-slate-600 border-slate-200"};
 const dateLabel=(date:string)=>date.split("-").reverse().join("/");
 const snapshotStats=(snapshot:Snapshot)=>{
- const accounts=new Map((snapshot.payload.accounts||[]).map(a=>[a.account_id,a]));
- const metrics=(snapshot.payload.ads||[]).map(a=>totals(a,accounts.get(a.account_id),1,snapshot.review_date));
+ if(snapshot.totals)return snapshot.totals;
+ const accounts=new Map((snapshot.payload?.accounts||[]).map(a=>[a.account_id,a]));
+ const metrics=(snapshot.payload?.ads||[]).map(a=>totals(a,accounts.get(a.account_id),1,snapshot.review_date));
  return {
    spend:metrics.reduce((sum,m)=>sum+(Number.isFinite(m.spend)?m.spend:0),0),
    sales:metrics.reduce((sum,m)=>sum+m.trackupSales,0),
@@ -82,10 +83,20 @@ export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
      if(force)setRefreshing(true);else if(!data)setLoading(true);
      try {
        const result=await query(slot?"capture":"overview",slot||undefined);
-       if(mounted){setData(result);setError("");if(slot)void loadHistory();}
+       if(mounted){setData(result);setError("");try{sessionStorage.setItem("trackup_ad_review_v1_"+result.date,JSON.stringify({key:dashboardKey,savedAt:Date.now(),report:result}))}catch{}if(slot)void loadHistory();}
      }catch(e){if(mounted)setError(e instanceof Error?e.message:"Falha na análise");}
      finally{if(mounted){setLoading(false);setRefreshing(false)}}
    };
+   // Reabre a última leitura local instantaneamente e revalida em segundo plano.
+   try{
+     const raw=sessionStorage.getItem("trackup_ad_review_v1_"+localParts().date);
+     if(raw){
+       const saved=JSON.parse(raw);
+       if(saved.key===dashboardKey&&saved.report?.ok&&Date.now()-Number(saved.savedAt||0)<6*3600000){
+         setData(saved.report);setLoading(false);
+       }
+     }
+   }catch{}
    void Promise.all([load(tick>0),loadHistory()]);
    const timer=window.setInterval(()=>{const p=localParts(),slot=WINDOWS.find(w=>p.hour>=w.start&&p.hour<w.end)?.id;setClock(p);if(slot&&lastCapture!==p.date+":"+slot)void load(false);},60000);
    return()=>{mounted=false;window.clearInterval(timer);};
