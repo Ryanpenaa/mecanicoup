@@ -626,6 +626,11 @@ function Unlock({
   );
 }
 
+
+const FINANCE_EXCLUDED_IDS=new Set(["1593509388682189","2220129438533853","1160571526431916"]);
+const FINANCE_API="https://xahydzcmpikbioeyvwst.supabase.co/functions/v1";
+const financeDollar=(day:string)=>day==="2026-10-27"||day==="2026-10-28"?5.82:5.5;
+type DailyClose={date:string;income:number;orders:number;spend:number;usd:number;fx:number;partial:boolean};
 function Index() {
   const [dashboardKey, setDashboardKey] = useState<string | null>(null);
   const [rows, setRows] = useState<Transaction[]>([]);
@@ -637,6 +642,9 @@ function Index() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("approved");
   const [selectedDate, setSelectedDate] = useState(() => todayDateKey());
+  const [dailyClose,setDailyClose]=useState<DailyClose|null>(null);
+  const [dailyCloseError,setDailyCloseError]=useState("");
+  const [dailyCloseLoading,setDailyCloseLoading]=useState(true);
   const [activeTab, setActiveTab] = useState<"summary" | "transactions" | "traffic" | "ads">("summary");
   const [visibleCards,setVisibleCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_summary_visible_v3")||"null");return Array.isArray(v)?v:["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}catch{return ["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}});
   const [editCards,setEditCards]=useState(false);
@@ -785,6 +793,38 @@ function Index() {
     void fetchDashboard(dashboardKey, true);
   }, [dashboardKey, selectedDate]);
 
+
+  useEffect(()=>{
+    if(!dashboardKey){setDailyClose(null);return}
+    let alive=true;
+    const load=async()=>{
+      try{
+        const headers={"x-dashboard-key":dashboardKey};
+        const [salesRes,metaRes]=await Promise.all([
+          fetch(FINANCE_API+"/tracking-period-summary?"+new URLSearchParams({start:selectedDate,end:selectedDate,offer:"all"}),{headers,cache:"no-store"}),
+          fetch(FINANCE_API+"/meta-spend-summary?"+new URLSearchParams({date:selectedDate,range:"today",account_id:"all"}),{headers,cache:"no-store"})
+        ]);
+        const [sales,meta]=await Promise.all([salesRes.json(),metaRes.json()]);
+        if(!salesRes.ok||!sales.ok||!sales.metrics)throw Error(sales.error||"Falha nas vendas aprovadas");
+        if(!metaRes.ok||!meta.ok||!Array.isArray(meta.accounts))throw Error(meta.error||"Falha nos gastos de anúncios");
+        const accounts=meta.accounts.filter((a:{account_id:string})=>!FINANCE_EXCLUDED_IDS.has(String(a.account_id)));
+        const usd=accounts.filter((a:{currency:string})=>a.currency==="USD").reduce((v:number,a:{spend:number})=>v+Number(a.spend||0),0);
+        const brl=accounts.filter((a:{currency:string})=>a.currency==="BRL").reduce((v:number,a:{spend:number})=>v+Number(a.spend||0),0);
+        const partial=Boolean(meta.partial)||Boolean(meta.errors?.length)||accounts.some((a:{currency:string})=>!["USD","BRL"].includes(a.currency));
+        const fx=financeDollar(selectedDate);
+        if(alive){
+          setDailyClose({date:selectedDate,income:Number(sales.metrics.revenue_cents||0)/100,orders:Number(sales.metrics.approved||0),spend:Math.round((usd*fx+brl)*100)/100,usd:Math.round(usd*100)/100,fx,partial});
+          setDailyCloseError("");
+        }
+      }catch(e){if(alive){setDailyClose(null);setDailyCloseError(e instanceof Error?e.message:"Erro no fechamento financeiro")}}
+      finally{if(alive)setDailyCloseLoading(false)}
+    };
+    setDailyCloseLoading(true);setDailyClose(null);setDailyCloseError("");
+    void load();
+    const timer=window.setInterval(()=>{void load()},60000);
+    return()=>{alive=false;window.clearInterval(timer)};
+  },[dashboardKey,selectedDate]);
+
   async function unlock(key: string) {
     const ok = await fetchDashboard(key);
     if (ok) {
@@ -859,6 +899,8 @@ function Index() {
     return()=>{live=false};
   },[dashboardKey,activeTab,selectedDate,periodDays,summaryAdAccount]);
   const revenue = approved.reduce((sum, row) => sum + (row.value ?? 0), 0);
+  const currentClose=dailyClose?.date===selectedDate?dailyClose:null;
+  const currentBalance=currentClose&&!currentClose.partial?currentClose.income-currentClose.spend:null;
   const totalGrossCents=financial?.global?.filter(v=>v.currency==="BRL").reduce((sum,v)=>sum+Number(v.approved_gross_cents||0),0)??null;
   const totalPercent=totalGrossCents===null?null:totalGrossCents/10000000*100;
   const chosenOffer=financial?.offers?.find(o=>o.offer_key===selectedOffer);
@@ -1112,11 +1154,25 @@ function Index() {
           </div>
         </section>
 
-        {activeTab==="summary"&&<div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3"><p className="text-sm font-bold">Visão geral · indicadores diários e históricos</p><select aria-label="Conta de anúncios do resumo" value={summaryAdAccount} onChange={e=>{setSummaryAdAccount(e.target.value);setSummaryMeta(null)}} className="rounded-lg border p-2 text-xs"><option value="all">Todas as contas Meta</option>{spendAccounts.map(a=><option key={a.account_id} value={a.account_id}>{a.name}</option>)}</select><select aria-label="Período do funil" className="rounded-lg border p-2" value={periodDays} onChange={e=>setPeriodDays(e.target.value)}><option value="1">Hoje</option><option value="3">Últimos 3 dias</option><option value="7">Últimos 7 dias</option><option value="14">Últimos 14 dias</option><option value="30">Últimos 30 dias</option></select><select aria-label="Filtrar oferta" value={selectedOffer} onChange={e=>setSelectedOffer(e.target.value)} className="rounded-lg border p-2 text-xs"><option value="all">Todas as ofertas</option>{financial?.offers?.filter(o=>o.currency==="BRL").map(o=><option key={o.offer_key} value={o.offer_key}>{o.name}</option>)}</select><button type="button" onClick={()=>setEditCards(v=>!v)} className="rounded-lg border px-3 py-2 text-xs font-bold">{editCards?"Concluir":"Personalizar indicadores"}</button></div>{editCards&&<div className="flex flex-wrap gap-3 rounded-xl bg-white p-3"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showFunnel} onChange={e=>{setShowFunnel(e.target.checked);localStorage.setItem("trackup_show_funnel",String(e.target.checked))}}/>Mostrar funil</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={showPayments} onChange={e=>{setShowPayments(e.target.checked);localStorage.setItem("trackup_show_payments",String(e.target.checked))}}/>Pagamentos</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={showOffersPie} onChange={e=>{setShowOffersPie(e.target.checked);localStorage.setItem("trackup_show_offers_pie",String(e.target.checked))}}/>Pizza por oferta</label>{["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"].map(label=><label key={label} className="flex gap-2 text-xs"><input type="checkbox" checked={visibleCards.includes(label)} onChange={()=>setVisibleCards(v=>{const next=v.includes(label)?v.filter(x=>x!==label):[...v,label];localStorage.setItem("trackup_summary_visible_v3",JSON.stringify(next));return next;})}/>{label}</label>)}<div className="w-full border-t pt-3"><p className="mb-2 text-xs font-bold text-slate-500">Métricas Meta Ads — marcar para exibir</p><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{metricCatalog.map(card=><label key={card.key} className="flex items-center gap-2 rounded-lg border p-2 text-xs"><input type="checkbox" checked={visibleMetaCards.includes(card.key)} onChange={()=>toggleMetaCard(card.key)}/>{card.title}</label>)}</div></div></div>}        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
+        {activeTab==="summary"&&<div className="space-y-4">
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Fechamento financeiro Vega Appmax">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div><h2 className="text-lg font-extrabold">Fechamento financeiro diário</h2><p className="text-xs text-slate-500">{formatSelectedDate(selectedDate)} · Vega/Appmax + contas de anúncios permitidas</p></div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">{dailyCloseLoading?"Atualizando…":"Atualização automática"}</span>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-800">Vendas aprovadas</p><p className="mt-2 text-2xl font-black tabular-nums text-emerald-900">{currentClose?formatMoney(currentClose.income):"—"}</p><p className="mt-1 text-xs text-emerald-800">{currentClose?currentClose.orders+" compras confirmadas":"Vega via TrackUp"}</p></div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold text-slate-600">Gasto com anúncios</p><p className="mt-2 text-2xl font-black tabular-nums">{currentClose?formatMoney(currentClose.spend):"—"}</p><p className="mt-1 text-xs text-slate-500">{currentClose?formatMoney(currentClose.usd,"USD")+" · dólar R$ "+currentClose.fx.toFixed(2).replace(".",","):"Sem as três contas excluídas"}</p></div>
+            <div className={`rounded-xl border p-4 ${currentBalance===null?"border-slate-200 bg-slate-50":currentBalance>=0?"border-emerald-200 bg-emerald-50":"border-rose-200 bg-rose-50"}`}><p className="text-xs font-bold text-slate-600">Resultado após anúncios</p><p className={`mt-2 text-2xl font-black tabular-nums ${currentBalance===null?"text-slate-600":currentBalance>=0?"text-emerald-800":"text-rose-700"}`}>{currentBalance===null?"—":formatMoney(currentBalance)}</p><p className="mt-1 text-xs text-slate-500">Antes das taxas e retiradas</p></div>
+          </div>
+          {dailyCloseError&&<p role="alert" className="mt-3 text-xs font-medium text-rose-700">{dailyCloseError}</p>}
+          {currentClose?.partial&&<p role="alert" className="mt-3 text-xs text-amber-700">A Meta retornou dados parciais: o resultado foi ocultado para não induzir a erro.</p>}
+          <p className="mt-3 text-xs leading-5 text-slate-500">Vendas aprovadas registradas no TrackUp, sem somar as compras atribuídas pela Meta. Anúncios: contas acessíveis, exceto 1593509388682189, 2220129438533853 e 1160571526431916. Dólar R$ 5,50; em 27 e 28/10/2026, R$ 5,82. Pode haver atraso dos webhooks e diferença de fuso das contas de anúncio. Não inclui taxas Vega/Appmax, impostos, reembolsos posteriores ou despesas pessoais. Não representa lucro líquido nem saldo para saque.</p>
+        </section><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3"><p className="text-sm font-bold">Visão geral · indicadores diários e históricos</p><select aria-label="Conta de anúncios do resumo" value={summaryAdAccount} onChange={e=>{setSummaryAdAccount(e.target.value);setSummaryMeta(null)}} className="rounded-lg border p-2 text-xs"><option value="all">Todas as contas Meta</option>{spendAccounts.map(a=><option key={a.account_id} value={a.account_id}>{a.name}</option>)}</select><select aria-label="Período do funil" className="rounded-lg border p-2" value={periodDays} onChange={e=>setPeriodDays(e.target.value)}><option value="1">Hoje</option><option value="3">Últimos 3 dias</option><option value="7">Últimos 7 dias</option><option value="14">Últimos 14 dias</option><option value="30">Últimos 30 dias</option></select><select aria-label="Filtrar oferta" value={selectedOffer} onChange={e=>setSelectedOffer(e.target.value)} className="rounded-lg border p-2 text-xs"><option value="all">Todas as ofertas</option>{financial?.offers?.filter(o=>o.currency==="BRL").map(o=><option key={o.offer_key} value={o.offer_key}>{o.name}</option>)}</select><button type="button" onClick={()=>setEditCards(v=>!v)} className="rounded-lg border px-3 py-2 text-xs font-bold">{editCards?"Concluir":"Personalizar indicadores"}</button></div>{editCards&&<div className="flex flex-wrap gap-3 rounded-xl bg-white p-3"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showFunnel} onChange={e=>{setShowFunnel(e.target.checked);localStorage.setItem("trackup_show_funnel",String(e.target.checked))}}/>Mostrar funil</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={showPayments} onChange={e=>{setShowPayments(e.target.checked);localStorage.setItem("trackup_show_payments",String(e.target.checked))}}/>Pagamentos</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={showOffersPie} onChange={e=>{setShowOffersPie(e.target.checked);localStorage.setItem("trackup_show_offers_pie",String(e.target.checked))}}/>Pizza por oferta</label>{["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"].map(label=><label key={label} className="flex gap-2 text-xs"><input type="checkbox" checked={visibleCards.includes(label)} onChange={()=>setVisibleCards(v=>{const next=v.includes(label)?v.filter(x=>x!==label):[...v,label];localStorage.setItem("trackup_summary_visible_v3",JSON.stringify(next));return next;})}/>{label}</label>)}<div className="w-full border-t pt-3"><p className="mb-2 text-xs font-bold text-slate-500">Métricas Meta Ads — marcar para exibir</p><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{metricCatalog.map(card=><label key={card.key} className="flex items-center gap-2 rounded-lg border p-2 text-xs"><input type="checkbox" checked={visibleMetaCards.includes(card.key)} onChange={()=>toggleMetaCard(card.key)}/>{card.title}</label>)}</div></div></div>}        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
           {[
             {label:"Faturamento histórico",value:chosenCents===null?"—":formatMoney(Number(chosenCents)/100),note:"Total acumulado de pagamentos aprovados",icon:ShoppingCart},
             {label:"Vendas aprovadas (histórico)",value:String(selectedOffer==="all"?(financial?.global?.find(g=>g.currency==="BRL")?.approved_orders??"—"):(chosenOffer?.approved_orders??"—")),note:"Pedidos registrados no financeiro",icon:CheckCircle2},
-            {label:"Faturamento do dia",value:formatMoney(filteredDayApproved.reduce((v,r)=>v+(r.value??0),0)),note:"Somente a data selecionada",icon:CalendarDays},
+            {label:"Faturamento do dia",value:selectedOffer==="all"&&currentClose?formatMoney(currentClose.income):formatMoney(filteredDayApproved.reduce((v,r)=>v+(r.value??0),0)),note:"Somente a data selecionada",icon:CalendarDays},
             {label:"Vendas identificadas",value:String(filteredDayApproved.filter(r=>r.tracking_matched).length),note:"Com sessão de rastreamento",icon:CheckCircle2},
             {label:"Envios pelo TrackUp",value:String(filteredDayApproved.filter(r=>r.purchase_sent_by_trackup).length),note:"Marcados como enviados pelo sistema",icon:Zap},
             {label:"Exigem atenção",value:String(filteredDayApproved.filter(r=>!r.tracking_matched||Boolean(r.meta_purchase_error)||r.fbc_status==="mismatch").length),note:"Sem identificação, erro ou FBC divergente",icon:AlertTriangle}
