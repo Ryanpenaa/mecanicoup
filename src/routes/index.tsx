@@ -656,22 +656,14 @@ function Index() {
   const [brlRates,setBrlRates]=useState<Record<string,number>>({});
   const [visibleMetaCards,setVisibleMetaCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_meta_summary_cards")||"null");return Array.isArray(v)&&v.length?v:["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}catch{return ["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];}});
   const toggleMetaCard=(key:string)=>setVisibleMetaCards(v=>{const next=v.includes(key)?v.filter(x=>x!==key):[...v,key];localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(next));return next;});
-  const [spendRange,setSpendRange]=useState("today");
-  const [spendAccount,setSpendAccount]=useState("all");
-  const [spendStart,setSpendStart]=useState("");
-  const [spendEnd,setSpendEnd]=useState("");
   const [spendAccounts,setSpendAccounts]=useState<Array<{account_id:string;name:string}>>([]);
-  const [spendData,setSpendData]=useState<{by_currency:Record<string,number>;partial:boolean;since:string;until:string}|null>(null);
-  const [spendError,setSpendError]=useState("");
-  const [spendLoading,setSpendLoading]=useState(false);
   // Reference rates by currency and report end date; never silently invent an exchange rate.
   useEffect(()=>{
     const currencies=new Set<string>();
     for(const a of summaryMeta?.accounts||[])if(a.currency&&a.currency!=="BRL")currencies.add(a.currency);
-    for(const c of Object.keys(spendData?.by_currency||{}))if(c!=="BRL")currencies.add(c);
     let active=true;
     Promise.all([...currencies].map(async code=>{
-      const day=summaryMeta?.accounts?.some((a:any)=>a.currency===code)?selectedDate:(spendData?.until||selectedDate);
+      const day=selectedDate;
       const key=code+"_"+day;
       if(brlRates[key])return;
       try {
@@ -682,7 +674,7 @@ function Index() {
       }catch {/* Unavailable means blank, not an invented conversion. */}
     }));
     return()=>{active=false};
-  },[summaryMeta,spendData,selectedDate]);
+  },[summaryMeta,selectedDate]);
 
   const [periodDays,setPeriodDays]=useState("7");
   const [periodMetrics,setPeriodMetrics]=useState<Record<string,number>|null>(null);
@@ -875,20 +867,6 @@ function Index() {
      .catch(()=>{});
   },[dashboardKey]);
   useEffect(()=>{
-    if(!dashboardKey||spendRange==="custom"&&(!spendStart||!spendEnd))return;
-    let active=true;setSpendLoading(true);setSpendError("");
-    const args=new URLSearchParams({date:selectedDate,range:spendRange,account_id:spendAccount});
-    if(spendRange==="custom"){args.set("start",spendStart);args.set("end",spendEnd)}
-    const timer=setTimeout(()=>{
-      fetch("https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/meta-spend-summary?"+args,{headers:{"x-dashboard-key":dashboardKey}})
-      .then(async r=>{const d=await r.json();if(!r.ok||d.ok===false&&!d.partial)throw Error(d.detail||d.error||"Falha na Meta");return d})
-      .then(d=>{if(active)setSpendData(d)})
-      .catch(e=>{if(active){setSpendData(null);setSpendError(e instanceof Error?e.message:"Falha na consulta")}})
-      .finally(()=>{if(active)setSpendLoading(false)});
-    },250);
-    return()=>{active=false;clearTimeout(timer)};
-  },[dashboardKey,selectedDate,spendRange,spendAccount,spendStart,spendEnd]);
-  useEffect(()=>{
     if(!dashboardKey||activeTab!=="summary")return;
     let live=true;setSummaryMetaLoading(true);setSummaryMeta(null);
     const args=new URLSearchParams({date:selectedDate,range:periodDays==="1"?"today":periodDays,account_id:summaryAdAccount});
@@ -1033,14 +1011,11 @@ function Index() {
             </div>
           </div>
 <div className="hidden min-w-[220px] px-3 sm:block"><div className="flex justify-between gap-3 text-xs font-bold"><span>Meta da oferta: R$ 100 mil</span><span>{totalPercent===null?"—":totalPercent.toLocaleString("pt-BR",{maximumFractionDigits:2})+"%"}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-emerald-400" style={{width:Math.min(100,Math.max(0,totalPercent??0))+"%"}}/></div><p className="mt-1 text-[10px] text-slate-400">{totalGrossCents===null?"Aguardando total histórico":formatMoney(totalGrossCents/100)+" acumulados (todas as ofertas registradas)"}</p></div>
-          <div className="min-w-[180px] border-l border-white/15 px-4">
- <div className="flex items-center gap-1.5"><p className="text-[11px] font-bold text-slate-300">Gasto em anúncios</p><select aria-label="Período do gasto" title="Selecionar período do gasto" value={spendRange} onChange={e=>setSpendRange(e.target.value)} className="max-w-[110px] cursor-pointer bg-transparent text-[10px] text-emerald-300 outline-none"><option className="text-slate-900" value="today">Hoje</option><option className="text-slate-900" value="yesterday">Ontem</option><option className="text-slate-900" value="3">3 dias</option><option className="text-slate-900" value="7">7 dias</option><option className="text-slate-900" value="14">14 dias</option><option className="text-slate-900" value="30">30 dias</option><option className="text-slate-900" value="this_month">Este mês</option><option className="text-slate-900" value="all">Acumulado</option><option className="text-slate-900" value="custom">Personalizado</option></select></div>
- <p className="mt-1 text-lg font-extrabold text-white">{spendLoading?"Atualizando...":spendData?Object.entries(spendData.by_currency).map(([currency,amount])=>{const value=toBRL(amount,currency,spendData.until);return value===null?"Cotação de "+currency+" indisponível":formatMoney(value,"BRL")}).join(" · ")||"Sem gastos": "—"}</p>
- <select aria-label="Conta de anúncios para o gasto" title="Filtrar conta" value={spendAccount} onChange={e=>setSpendAccount(e.target.value)} className="max-w-[210px] cursor-pointer bg-transparent text-[10px] text-slate-300 outline-none"><option className="text-slate-900" value="all">Todas as contas</option>{spendAccounts.map(a=><option className="text-slate-900" key={a.account_id} value={a.account_id}>{a.name}</option>)}</select>
- {spendRange==="custom"&&<div className="mt-1 flex flex-wrap gap-1"><input aria-label="Gasto a partir de" type="date" value={spendStart} onChange={e=>setSpendStart(e.target.value)} className="w-[122px] rounded bg-slate-800 p-1 text-[10px]"/><input aria-label="Gasto até" type="date" value={spendEnd} onChange={e=>setSpendEnd(e.target.value)} className="w-[122px] rounded bg-slate-800 p-1 text-[10px]"/></div>}
- {spendError&&<p className="mt-1 text-[10px] text-rose-300">{spendError}</p>}
- {spendData?.partial&&<p className="mt-1 text-[10px] text-amber-200">Algumas contas não puderam ser consultadas</p>}
- </div>
+          <div className="hidden min-w-0 flex-1 grid-cols-3 gap-2 xl:grid" aria-label="Fechamento diário das contas elegíveis">
+            <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2"><p className="text-[10px] font-semibold text-slate-300">Vendas do dia</p><p className="mt-1 text-base font-black tabular-nums text-emerald-300">{currentClose?formatMoney(currentClose.income):"—"}</p></div>
+            <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2"><p className="text-[10px] font-semibold text-slate-300">Anúncios válidos</p><p className="mt-1 text-base font-black tabular-nums text-white">{currentClose?formatMoney(currentClose.spend):"—"}</p></div>
+            <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2"><p className="text-[10px] font-semibold text-slate-300">Após anúncios</p><p className={`mt-1 text-base font-black tabular-nums ${currentBalance===null?"text-slate-300":currentBalance>=0?"text-emerald-300":"text-rose-300"}`}>{currentBalance===null?"—":formatMoney(currentBalance)}</p></div>
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -1065,14 +1040,16 @@ function Index() {
           </div>
         </div>
       </header>
-      <div className="bg-slate-950 px-4 pb-3 text-white sm:hidden"><div className="flex justify-between text-xs font-bold"><span>Meta da oferta: R$ 100 mil</span><span>{totalPercent===null?"—":totalPercent.toLocaleString("pt-BR",{maximumFractionDigits:2})+"%"}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-emerald-400" style={{width:Math.min(100,Math.max(0,totalPercent??0))+"%"}}/></div><div className="mt-3 border-t border-white/10 pt-3 sm:hidden"><div className="min-w-[180px] border-l border-white/15 px-4">
- <div className="flex items-center gap-1.5"><p className="text-[11px] font-bold text-slate-300">Gasto em anúncios</p><select aria-label="Período do gasto" title="Selecionar período do gasto" value={spendRange} onChange={e=>setSpendRange(e.target.value)} className="max-w-[110px] cursor-pointer bg-transparent text-[10px] text-emerald-300 outline-none"><option className="text-slate-900" value="today">Hoje</option><option className="text-slate-900" value="yesterday">Ontem</option><option className="text-slate-900" value="3">3 dias</option><option className="text-slate-900" value="7">7 dias</option><option className="text-slate-900" value="14">14 dias</option><option className="text-slate-900" value="30">30 dias</option><option className="text-slate-900" value="this_month">Este mês</option><option className="text-slate-900" value="all">Acumulado</option><option className="text-slate-900" value="custom">Personalizado</option></select></div>
- <p className="mt-1 text-lg font-extrabold text-white">{spendLoading?"Atualizando...":spendData?Object.entries(spendData.by_currency).map(([currency,amount])=>formatMoney(amount,currency)).join(" · ")||"Sem gastos": "—"}</p>
- <select aria-label="Conta de anúncios para o gasto" title="Filtrar conta" value={spendAccount} onChange={e=>setSpendAccount(e.target.value)} className="max-w-[210px] cursor-pointer bg-transparent text-[10px] text-slate-300 outline-none"><option className="text-slate-900" value="all">Todas as contas</option>{spendAccounts.map(a=><option className="text-slate-900" key={a.account_id} value={a.account_id}>{a.name}</option>)}</select>
- {spendRange==="custom"&&<div className="mt-1 flex flex-wrap gap-1"><input aria-label="Gasto a partir de" type="date" value={spendStart} onChange={e=>setSpendStart(e.target.value)} className="w-[122px] rounded bg-slate-800 p-1 text-[10px]"/><input aria-label="Gasto até" type="date" value={spendEnd} onChange={e=>setSpendEnd(e.target.value)} className="w-[122px] rounded bg-slate-800 p-1 text-[10px]"/></div>}
- {spendError&&<p className="mt-1 text-[10px] text-rose-300">{spendError}</p>}
- {spendData?.partial&&<p className="mt-1 text-[10px] text-amber-200">Algumas contas não puderam ser consultadas</p>}
- </div></div></div>
+      <div className="border-t border-white/5 bg-slate-950 px-3 pb-3 pt-2 text-white xl:hidden">
+        <p className="mb-2 text-[10px] font-semibold tracking-wide text-slate-400">FECHAMENTO DIÁRIO · {formatSelectedDate(selectedDate)}</p>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="min-w-0 rounded-lg bg-white/5 p-2"><p className="text-[10px] text-slate-300">Vendas</p><p className="mt-1 text-xs font-black tabular-nums sm:text-sm">{currentClose?formatMoney(currentClose.income):"—"}</p></div>
+          <div className="min-w-0 rounded-lg bg-white/5 p-2"><p className="text-[10px] text-slate-300">Anúncios</p><p className="mt-1 text-xs font-black tabular-nums sm:text-sm">{currentClose?formatMoney(currentClose.spend):"—"}</p></div>
+          <div className="min-w-0 rounded-lg bg-white/5 p-2"><p className="text-[10px] text-slate-300">Resultado</p><p className={`mt-1 text-xs font-black tabular-nums sm:text-sm ${currentBalance===null?"text-slate-300":currentBalance>=0?"text-emerald-300":"text-rose-300"}`}>{currentBalance===null?"—":formatMoney(currentBalance)}</p></div>
+        </div>
+        {dailyCloseError&&<p className="mt-2 text-xs text-rose-300">{dailyCloseError}</p>}
+        {currentClose?.partial&&<p className="mt-2 text-xs text-amber-300">Meta parcial · sem resultado confiável</p>}
+      </div>
 
       <div className="mx-auto flex max-w-[1920px] flex-col md:flex-row"><aside className="w-full shrink-0 border-b border-slate-200 bg-white p-3 md:w-56 md:border-r md:p-4"><nav aria-label="Menu principal" className="flex gap-2 overflow-x-auto md:flex-col">{([{id:"summary",name:"Resumo",icon:Gauge},{id:"ads",name:"Campanhas",icon:Activity},{id:"traffic",name:"Qualidade do tráfego",icon:Eye},{id:"transactions",name:"Vendas / Webhooks",icon:ShoppingCart}] as const).map(item=><button key={item.id} type="button" onClick={()=>setActiveTab(item.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-3 text-left text-sm font-bold md:w-full ${activeTab===item.id?"bg-blue-600 text-white":"text-slate-600 hover:bg-slate-100"}`}><item.icon className="h-4 w-4"/>{item.name}</button>)}</nav><p className="mt-8 hidden text-xs text-slate-400 md:block">TrackUp · PT-BR</p></aside><main className="trackup-main min-w-0 flex-1 space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
