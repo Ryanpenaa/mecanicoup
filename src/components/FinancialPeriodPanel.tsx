@@ -86,7 +86,7 @@ export function FinancialPeriodPanel({dashboardKey,onResult}:{dashboardKey:strin
      finally{if(alive)setLoading(false)}
    };
    void load(refresh>0);
-   timer=window.setInterval(()=>{void load(true)},applied.end===localDay()?60000:600000);
+   timer=window.setInterval(()=>{void load(true)},applied.end===localDay()?15000:600000);
    return()=>{alive=false;window.clearInterval(timer)}
  },[dashboardKey,applied,refresh]);
  const validReport=report?.start===applied.start&&report.end===applied.end?report:null;
