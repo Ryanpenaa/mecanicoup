@@ -823,7 +823,7 @@ function Index() {
         // Dedicated revenue endpoint avoids loading sessions, events and payment charts.
         const [salesRes,metaRes]=await Promise.all([
           fetch(FINANCE_API+"/tracking-daily-revenue?"+new URLSearchParams({date:selectedDate}),{headers,cache:"no-store"}),
-          fetch(FINANCE_API+"/meta-spend-summary?"+new URLSearchParams({date:selectedDate,range:"today",account_id:"all"}),{headers,cache:"no-store"})
+          fetch(FINANCE_API+"/meta-spend-summary?"+new URLSearchParams({date:selectedDate,range:"today",account_id:"all",exclude:[...FINANCE_EXCLUDED_IDS].join(",")}),{headers,cache:"no-store"})
         ]);
         const [sales,meta]=await Promise.all([salesRes.json(),metaRes.json()]);
         if(!salesRes.ok||!sales.ok||!Number.isFinite(Number(sales.revenue_cents)))throw Error(sales.error||"Falha nas vendas aprovadas");
@@ -1176,7 +1176,7 @@ function Index() {
         {activeTab==="summary"&&<div className="space-y-4">
         <div role="group" aria-label="Visualização do fechamento financeiro" className="flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
           <button type="button" aria-pressed={financeView==="day"} onClick={()=>setFinanceView("day")} className={`rounded-lg px-4 py-2 text-sm font-bold ${financeView==="day"?"bg-slate-950 text-white":"text-slate-600 hover:bg-slate-50"}`}>Diário</button>
-          <button type="button" aria-pressed={financeView==="range"} onClick={()=>setFinanceView("range")} className={`rounded-lg px-4 py-2 text-sm font-bold ${financeView==="range"?"bg-slate-950 text-white":"text-slate-600 hover:bg-slate-50"}`}>Por período</button>
+          <button type="button" aria-pressed={financeView==="range"} onClick={()=>{setPeriodFinance(null);setFinanceView("range")}} className={`rounded-lg px-4 py-2 text-sm font-bold ${financeView==="range"?"bg-slate-950 text-white":"text-slate-600 hover:bg-slate-50"}`}>Por período</button>
         </div>
         {financeView==="day"?<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Fechamento financeiro Vega Appmax">
           <div className="flex flex-wrap items-center justify-between gap-2">
