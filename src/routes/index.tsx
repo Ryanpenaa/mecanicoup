@@ -108,7 +108,7 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
   };
   const resetHierarchy=()=>{setSelectedCampaign("");setSelectedAdset("");setLevel("campaign");};
 
-  const load=async(silent=false)=>{
+  const load=async(silent=false,force=false)=>{
     if(!silent){
       setBusy(true);
       setRows([]);
@@ -118,6 +118,11 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
       resetHierarchy();
     }
     try {
+      if(force){
+        const sync=await fetch("https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/trackup-meta-sync?"+new URLSearchParams({start:date,end:date,account_id:selectedAccount.replace(/^act_/,""),force:"1"}),{headers:{"x-dashboard-key":dashboardKey}});
+        const outcome=await sync.json();
+        if(!sync.ok||!outcome.ok)throw Error("Atualização indisponível: "+(outcome.errors?.[0]?.error||outcome.error||"erro"));
+      }
       const url=ADS_ENDPOINT+"?date="+encodeURIComponent(date)+"&account_id="+encodeURIComponent(selectedAccount);
       const res=await fetch(url,{headers:{"x-dashboard-key":dashboardKey}});
       const data=await res.json();
@@ -224,7 +229,7 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-sm text-slate-600">{message}</p>
-      <button type="button" disabled={busy||!selectedAccount} onClick={()=>void load()} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?"Consultando...":"Consultar Meta Ads"}</button>
+      <button type="button" disabled={busy||!selectedAccount} onClick={()=>void load(false,true)} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy?"Consultando...":"Consultar Meta Ads"}</button>
     </div>
     {rows.length>0&&<>
       <p className="text-xs font-semibold text-slate-600">{fxFallback?"Cotação automática indisponível: utilizando taxa provisória de US$ 1 = R$ 5,60.":fxRate===null?"Cotação indisponível: valores exibidos na moeda original ("+currency+"), sem conversão.":currency==="BRL"?"Conta em BRL: valores em reais, sem conversão.":"Valores convertidos de "+currency+" para BRL pela cotação de "+(fxDate||date)+" (1 "+currency+" = "+fxRate.toFixed(4)+" BRL). Cotação de referência; pode diferir da cobrança Meta."}</p>
@@ -943,11 +948,13 @@ function Index() {
     setSummaryMeta(previous);
     if(previous?.accounts)setSpendAccounts(previous.accounts.map((a:MetaAccount)=>({account_id:a.account_id,name:a.name})));
     const args=new URLSearchParams({date:selectedDate,range:periodDays==="1"?"today":periodDays,account_id:summaryAdAccount});
-    fetch("https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/meta-spend-summary?"+args,{headers:{"x-dashboard-key":dashboardKey}})
+    const poll=()=>fetch("https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/meta-spend-summary?"+args,{headers:{"x-dashboard-key":dashboardKey}})
     .then(async r=>{const d=await r.json();if(!r.ok||!d.metrics)throw Error(d.detail||d.error||"Falha na consulta");return d})
     .then(d=>{if(live){setSummaryMeta(d);setSummaryMetaError(d.partial?"Consulta parcial de contas":"");if(summaryAdAccount==="all"&&d.accounts)setSpendAccounts(d.accounts.map((a:MetaAccount)=>({account_id:a.account_id,name:a.name})));try{if(!d.partial)sessionStorage.setItem(cacheKey,JSON.stringify({savedAt:Date.now(),data:d}));}catch{}}})
     .catch(e=>{if(live){setSummaryMeta(previous);setSummaryMetaError("Consulta recente indisponível: "+String(e.message||e));}}).finally(()=>{if(live)setSummaryMetaLoading(false)});
-    return()=>{live=false};
+    void poll();
+    const timer=window.setInterval(()=>void poll(),60000);
+    return()=>{live=false;window.clearInterval(timer)};
   },[dashboardKey,activeTab,selectedDate,periodDays,summaryAdAccount]);
   const revenue = approved.reduce((sum, row) => sum + (row.value ?? 0), 0);
   const currentClose=dailyClose?.date===selectedDate?dailyClose:null;
