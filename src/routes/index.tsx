@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { TrackUpChat } from "../components/TrackUpChat";
+import { FinancialPeriodPanel, clearFinancialPeriodCache, type PeriodFinancialTotal } from "../components/FinancialPeriodPanel";
 import {
   Activity,
   AlertTriangle,
@@ -661,6 +662,8 @@ function Index() {
   const [dailyCloseError,setDailyCloseError]=useState("");
   const [dailyCloseLoading,setDailyCloseLoading]=useState(true);
   const [dailyCloseRefresh,setDailyCloseRefresh]=useState(0);
+  const [financeView,setFinanceView]=useState<"day"|"range">("day");
+  const [periodFinance,setPeriodFinance]=useState<PeriodFinancialTotal|null>(null);
   const [activeTab, setActiveTab] = useState<"summary" | "transactions" | "traffic" | "ads">("summary");
   const [visibleCards,setVisibleCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_summary_visible_v3")||"null");return Array.isArray(v)?v:["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}catch{return ["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}});
   const [editCards,setEditCards]=useState(false);
@@ -860,6 +863,7 @@ function Index() {
   }
 
   function logout() {
+    clearFinancialPeriodCache();
     localStorage.removeItem(STORAGE_KEY);
     for(const key of Object.keys(localStorage))if(key.startsWith(DAILY_CLOSE_CACHE_PREFIX))localStorage.removeItem(key);
     setDashboardKey(null);
@@ -913,6 +917,10 @@ function Index() {
   const revenue = approved.reduce((sum, row) => sum + (row.value ?? 0), 0);
   const currentClose=dailyClose?.date===selectedDate?dailyClose:null;
   const currentBalance=currentClose&&!currentClose.partial?currentClose.income-currentClose.spend:null;
+  const topRevenue=financeView==="range"?periodFinance?.income??null:currentClose?.income??null;
+  const topSpend=financeView==="range"?periodFinance?.spend??null:currentClose?.spend??null;
+  const topBalance=financeView==="range"?periodFinance?.balance??null:currentBalance;
+  const topScope=financeView==="range"?"Período":"Dia";
   const totalGrossCents=financial?.global?.filter(v=>v.currency==="BRL").reduce((sum,v)=>sum+Number(v.approved_gross_cents||0),0)??null;
   const totalPercent=totalGrossCents===null?null:totalGrossCents/10000000*100;
   const chosenOffer=financial?.offers?.find(o=>o.offer_key===selectedOffer);
@@ -1045,10 +1053,10 @@ function Index() {
             </div>
           </div>
 <div className="hidden min-w-[220px] px-3 sm:block"><div className="flex justify-between gap-3 text-xs font-bold"><span>Meta da oferta: R$ 100 mil</span><span>{totalPercent===null?"—":totalPercent.toLocaleString("pt-BR",{maximumFractionDigits:2})+"%"}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-emerald-400" style={{width:Math.min(100,Math.max(0,totalPercent??0))+"%"}}/></div><p className="mt-1 text-[10px] text-slate-400">{totalGrossCents===null?"Aguardando total histórico":formatMoney(totalGrossCents/100)+" acumulados (todas as ofertas registradas)"}</p></div>
-          <div className="hidden min-w-0 flex-1 grid-cols-3 gap-2 xl:grid" aria-label="Fechamento diário das contas elegíveis">
-            <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2"><p className="text-[10px] font-semibold text-slate-300">Vendas do dia</p><p className="mt-1 text-base font-black tabular-nums text-emerald-300">{currentClose?formatMoney(currentClose.income):"—"}</p></div>
-            <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2"><p className="text-[10px] font-semibold text-slate-300">Anúncios válidos</p><p className="mt-1 text-base font-black tabular-nums text-white">{currentClose?formatMoney(currentClose.spend):"—"}</p></div>
-            <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2"><p className="text-[10px] font-semibold text-slate-300">Após anúncios</p><p className={`mt-1 text-base font-black tabular-nums ${currentBalance===null?"text-slate-300":currentBalance>=0?"text-emerald-300":"text-rose-300"}`}>{currentBalance===null?"—":formatMoney(currentBalance)}</p></div>
+          <div className="hidden min-w-0 flex-1 grid-cols-3 gap-2 xl:grid" aria-label="Fechamento financeiro da seleção">
+            <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2"><p className="text-[10px] font-semibold text-slate-300">Vendas · {topScope}</p><p className="mt-1 text-base font-black tabular-nums text-emerald-300">{topRevenue===null?"—":formatMoney(topRevenue)}</p></div>
+            <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2"><p className="text-[10px] font-semibold text-slate-300">Anúncios válidos</p><p className="mt-1 text-base font-black tabular-nums text-white">{topSpend===null?"—":formatMoney(topSpend)}</p></div>
+            <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2"><p className="text-[10px] font-semibold text-slate-300">Após anúncios</p><p className={`mt-1 text-base font-black tabular-nums ${topBalance===null?"text-slate-300":topBalance>=0?"text-emerald-300":"text-rose-300"}`}>{topBalance===null?"—":formatMoney(topBalance)}</p></div>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -1075,11 +1083,11 @@ function Index() {
         </div>
       </header>
       <div className="border-t border-white/5 bg-slate-950 px-3 pb-3 pt-2 text-white xl:hidden">
-        <p className="mb-2 text-[10px] font-semibold tracking-wide text-slate-400">FECHAMENTO DIÁRIO · {formatSelectedDate(selectedDate)}</p>
+        <p className="mb-2 text-[10px] font-semibold tracking-wide text-slate-400">FECHAMENTO · {financeView==="range"&&periodFinance?periodFinance.start.split("-").reverse().join("/")+" a "+periodFinance.end.split("-").reverse().join("/"):formatSelectedDate(selectedDate)}</p>
         <div className="grid grid-cols-3 gap-2">
-          <div className="min-w-0 rounded-lg bg-white/5 p-2"><p className="text-[10px] text-slate-300">Vendas</p><p className="mt-1 text-xs font-black tabular-nums sm:text-sm">{currentClose?formatMoney(currentClose.income):"—"}</p></div>
-          <div className="min-w-0 rounded-lg bg-white/5 p-2"><p className="text-[10px] text-slate-300">Anúncios</p><p className="mt-1 text-xs font-black tabular-nums sm:text-sm">{currentClose?formatMoney(currentClose.spend):"—"}</p></div>
-          <div className="min-w-0 rounded-lg bg-white/5 p-2"><p className="text-[10px] text-slate-300">Resultado</p><p className={`mt-1 text-xs font-black tabular-nums sm:text-sm ${currentBalance===null?"text-slate-300":currentBalance>=0?"text-emerald-300":"text-rose-300"}`}>{currentBalance===null?"—":formatMoney(currentBalance)}</p></div>
+          <div className="min-w-0 rounded-lg bg-white/5 p-2"><p className="text-[10px] text-slate-300">Vendas</p><p className="mt-1 text-xs font-black tabular-nums sm:text-sm">{topRevenue===null?"—":formatMoney(topRevenue)}</p></div>
+          <div className="min-w-0 rounded-lg bg-white/5 p-2"><p className="text-[10px] text-slate-300">Anúncios</p><p className="mt-1 text-xs font-black tabular-nums sm:text-sm">{topSpend===null?"—":formatMoney(topSpend)}</p></div>
+          <div className="min-w-0 rounded-lg bg-white/5 p-2"><p className="text-[10px] text-slate-300">Resultado</p><p className={`mt-1 text-xs font-black tabular-nums sm:text-sm ${topBalance===null?"text-slate-300":topBalance>=0?"text-emerald-300":"text-rose-300"}`}>{topBalance===null?"—":formatMoney(topBalance)}</p></div>
         </div>
         {dailyCloseError&&<p className="mt-2 text-xs text-rose-300">{dailyCloseError}</p>}
         {currentClose?.partial&&<p className="mt-2 text-xs text-amber-300">Meta parcial · sem resultado confiável</p>}
@@ -1166,7 +1174,11 @@ function Index() {
         </section>
 
         {activeTab==="summary"&&<div className="space-y-4">
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Fechamento financeiro Vega Appmax">
+        <div role="group" aria-label="Visualização do fechamento financeiro" className="flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
+          <button type="button" aria-pressed={financeView==="day"} onClick={()=>setFinanceView("day")} className={`rounded-lg px-4 py-2 text-sm font-bold ${financeView==="day"?"bg-slate-950 text-white":"text-slate-600 hover:bg-slate-50"}`}>Diário</button>
+          <button type="button" aria-pressed={financeView==="range"} onClick={()=>setFinanceView("range")} className={`rounded-lg px-4 py-2 text-sm font-bold ${financeView==="range"?"bg-slate-950 text-white":"text-slate-600 hover:bg-slate-50"}`}>Por período</button>
+        </div>
+        {financeView==="day"?<section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-label="Fechamento financeiro Vega Appmax">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div><h2 className="text-lg font-extrabold">Fechamento financeiro diário</h2><p className="text-xs text-slate-500">{formatSelectedDate(selectedDate)} · Vega/Appmax + contas de anúncios permitidas · histórico por dia</p></div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1188,7 +1200,7 @@ function Index() {
           {currentClose?.partial&&<p role="alert" className="mt-3 text-xs text-amber-700">A Meta retornou dados parciais: o resultado foi ocultado para não induzir a erro.</p>}
           {currentClose&&<p className="mt-2 text-[11px] text-slate-500">Última consulta: {new Date(currentClose.fetchedAt).toLocaleString("pt-BR",{timeZone:DASHBOARD_TIME_ZONE,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}{currentClose.cached?" · valores salvos, sujeitos a atualização":""}</p>}
           <p className="mt-3 text-xs leading-5 text-slate-500">Use Hoje, Ontem ou o calendário para consultar qualquer data com registros; a data selecionada também atualiza os demais indicadores do painel. Vendas aprovadas registradas no TrackUp, sem somar as compras atribuídas pela Meta. Anúncios: contas acessíveis, exceto 1593509388682189, 2220129438533853 e 1160571526431916. Dólar R$ 5,50; em 27 e 28/10/2026, R$ 5,82. Pode haver atraso dos webhooks e diferença de fuso das contas de anúncio. Não inclui taxas Vega/Appmax, impostos, reembolsos posteriores ou despesas pessoais. Não representa lucro líquido nem saldo para saque.</p>
-        </section><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3"><p className="text-sm font-bold">Visão geral · indicadores diários e históricos</p><select aria-label="Conta de anúncios do resumo" value={summaryAdAccount} onChange={e=>{setSummaryAdAccount(e.target.value);setSummaryMeta(null)}} className="rounded-lg border p-2 text-xs"><option value="all">Todas as contas Meta</option>{spendAccounts.map(a=><option key={a.account_id} value={a.account_id}>{a.name}</option>)}</select><select aria-label="Período do funil" className="rounded-lg border p-2" value={periodDays} onChange={e=>setPeriodDays(e.target.value)}><option value="1">Hoje</option><option value="3">Últimos 3 dias</option><option value="7">Últimos 7 dias</option><option value="14">Últimos 14 dias</option><option value="30">Últimos 30 dias</option></select><select aria-label="Filtrar oferta" value={selectedOffer} onChange={e=>setSelectedOffer(e.target.value)} className="rounded-lg border p-2 text-xs"><option value="all">Todas as ofertas</option>{financial?.offers?.filter(o=>o.currency==="BRL").map(o=><option key={o.offer_key} value={o.offer_key}>{o.name}</option>)}</select><button type="button" onClick={()=>setEditCards(v=>!v)} className="rounded-lg border px-3 py-2 text-xs font-bold">{editCards?"Concluir":"Personalizar indicadores"}</button></div>{editCards&&<div className="flex flex-wrap gap-3 rounded-xl bg-white p-3"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showFunnel} onChange={e=>{setShowFunnel(e.target.checked);localStorage.setItem("trackup_show_funnel",String(e.target.checked))}}/>Mostrar funil</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={showPayments} onChange={e=>{setShowPayments(e.target.checked);localStorage.setItem("trackup_show_payments",String(e.target.checked))}}/>Pagamentos</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={showOffersPie} onChange={e=>{setShowOffersPie(e.target.checked);localStorage.setItem("trackup_show_offers_pie",String(e.target.checked))}}/>Pizza por oferta</label>{["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"].map(label=><label key={label} className="flex gap-2 text-xs"><input type="checkbox" checked={visibleCards.includes(label)} onChange={()=>setVisibleCards(v=>{const next=v.includes(label)?v.filter(x=>x!==label):[...v,label];localStorage.setItem("trackup_summary_visible_v3",JSON.stringify(next));return next;})}/>{label}</label>)}<div className="w-full border-t pt-3"><p className="mb-2 text-xs font-bold text-slate-500">Métricas Meta Ads — marcar para exibir</p><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{metricCatalog.map(card=><label key={card.key} className="flex items-center gap-2 rounded-lg border p-2 text-xs"><input type="checkbox" checked={visibleMetaCards.includes(card.key)} onChange={()=>toggleMetaCard(card.key)}/>{card.title}</label>)}</div></div></div>}        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
+        </section>:<FinancialPeriodPanel dashboardKey={dashboardKey!} onResult={setPeriodFinance}/>}<div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3"><p className="text-sm font-bold">Visão geral · indicadores diários e históricos</p><select aria-label="Conta de anúncios do resumo" value={summaryAdAccount} onChange={e=>{setSummaryAdAccount(e.target.value);setSummaryMeta(null)}} className="rounded-lg border p-2 text-xs"><option value="all">Todas as contas Meta</option>{spendAccounts.map(a=><option key={a.account_id} value={a.account_id}>{a.name}</option>)}</select><select aria-label="Período do funil" className="rounded-lg border p-2" value={periodDays} onChange={e=>setPeriodDays(e.target.value)}><option value="1">Hoje</option><option value="3">Últimos 3 dias</option><option value="7">Últimos 7 dias</option><option value="14">Últimos 14 dias</option><option value="30">Últimos 30 dias</option></select><select aria-label="Filtrar oferta" value={selectedOffer} onChange={e=>setSelectedOffer(e.target.value)} className="rounded-lg border p-2 text-xs"><option value="all">Todas as ofertas</option>{financial?.offers?.filter(o=>o.currency==="BRL").map(o=><option key={o.offer_key} value={o.offer_key}>{o.name}</option>)}</select><button type="button" onClick={()=>setEditCards(v=>!v)} className="rounded-lg border px-3 py-2 text-xs font-bold">{editCards?"Concluir":"Personalizar indicadores"}</button></div>{editCards&&<div className="flex flex-wrap gap-3 rounded-xl bg-white p-3"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showFunnel} onChange={e=>{setShowFunnel(e.target.checked);localStorage.setItem("trackup_show_funnel",String(e.target.checked))}}/>Mostrar funil</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={showPayments} onChange={e=>{setShowPayments(e.target.checked);localStorage.setItem("trackup_show_payments",String(e.target.checked))}}/>Pagamentos</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={showOffersPie} onChange={e=>{setShowOffersPie(e.target.checked);localStorage.setItem("trackup_show_offers_pie",String(e.target.checked))}}/>Pizza por oferta</label>{["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"].map(label=><label key={label} className="flex gap-2 text-xs"><input type="checkbox" checked={visibleCards.includes(label)} onChange={()=>setVisibleCards(v=>{const next=v.includes(label)?v.filter(x=>x!==label):[...v,label];localStorage.setItem("trackup_summary_visible_v3",JSON.stringify(next));return next;})}/>{label}</label>)}<div className="w-full border-t pt-3"><p className="mb-2 text-xs font-bold text-slate-500">Métricas Meta Ads — marcar para exibir</p><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{metricCatalog.map(card=><label key={card.key} className="flex items-center gap-2 rounded-lg border p-2 text-xs"><input type="checkbox" checked={visibleMetaCards.includes(card.key)} onChange={()=>toggleMetaCard(card.key)}/>{card.title}</label>)}</div></div></div>}        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
           {[
             {label:"Faturamento histórico",value:chosenCents===null?"—":formatMoney(Number(chosenCents)/100),note:"Total acumulado de pagamentos aprovados",icon:ShoppingCart},
             {label:"Vendas aprovadas (histórico)",value:String(selectedOffer==="all"?(financial?.global?.find(g=>g.currency==="BRL")?.approved_orders??"—"):(chosenOffer?.approved_orders??"—")),note:"Pedidos registrados no financeiro",icon:CheckCircle2},
