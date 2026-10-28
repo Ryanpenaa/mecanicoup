@@ -894,7 +894,7 @@ function Index() {
 
   function logout() {
     clearFinancialPeriodCache();
-    try{for(let i=sessionStorage.length-1;i>=0;i--){const k=sessionStorage.key(i);if(k?.startsWith(DASHBOARD_SNAPSHOT_PREFIX))sessionStorage.removeItem(k)}}catch{}
+    try{for(let i=sessionStorage.length-1;i>=0;i--){const k=sessionStorage.key(i);if(k?.startsWith(DASHBOARD_SNAPSHOT_PREFIX)||k?.startsWith("trackup_summary_meta_v2_"))sessionStorage.removeItem(k)}}catch{}
     localStorage.removeItem(STORAGE_KEY);
     for(const key of Object.keys(localStorage))if(key.startsWith(DAILY_CLOSE_CACHE_PREFIX))localStorage.removeItem(key);
     setDashboardKey(null);
@@ -929,20 +929,24 @@ function Index() {
   }, [approved]);
 
   useEffect(()=>{if(!dashboardKey||activeTab!=="summary")return;const end=selectedDate;const d=new Date(end+"T12:00:00Z");d.setUTCDate(d.getUTCDate()-Number(periodDays)+1);const start=d.toISOString().slice(0,10);let valid=true;fetch("https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/tracking-period-summary?start="+start+"&end="+end+"&offer="+selectedOffer,{headers:{"x-dashboard-key":dashboardKey}}).then(r=>r.json()).then(v=>{if(valid){setPeriodMetrics(v.ok?v.metrics:null);setPeriodDetail(v.ok?v:null)}}).catch(()=>{if(valid)setPeriodMetrics(null)});return()=>{valid=false}},[dashboardKey,activeTab,selectedDate,periodDays,selectedOffer]);
-  useEffect(()=>{
-    if(!dashboardKey)return;
-    fetch(ADS_ENDPOINT+"?action=accounts",{headers:{"x-dashboard-key":dashboardKey}})
-     .then(r=>r.json()).then(d=>{if(d.ok)setSpendAccounts((d.accounts||[]).map((a:MetaAccount)=>({account_id:a.account_id,name:a.name})))})
-     .catch(()=>{});
-  },[dashboardKey]);
+  // As contas para o seletor são reutilizadas da consulta do resumo Meta; não abre uma terceira chamada lenta.
   useEffect(()=>{
     if(!dashboardKey||activeTab!=="summary")return;
-    let live=true;setSummaryMetaLoading(true);setSummaryMeta(null);
+    let live=true;setSummaryMetaLoading(true);
+    const cacheKey="trackup_summary_meta_v2_"+selectedDate+"_"+periodDays+"_"+summaryAdAccount;
+    let previous:any=null;
+    try{
+      const raw=sessionStorage.getItem(cacheKey);
+      const item=raw?JSON.parse(raw):null;
+      if(item&&item.data?.ok&&Date.now()-Number(item.savedAt||0)<6*3600000)previous=item.data;
+    }catch{}
+    setSummaryMeta(previous);
+    if(previous?.accounts)setSpendAccounts(previous.accounts.map((a:MetaAccount)=>({account_id:a.account_id,name:a.name})));
     const args=new URLSearchParams({date:selectedDate,range:periodDays==="1"?"today":periodDays,account_id:summaryAdAccount});
     fetch("https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/meta-spend-summary?"+args,{headers:{"x-dashboard-key":dashboardKey}})
     .then(async r=>{const d=await r.json();if(!r.ok||!d.metrics)throw Error(d.detail||d.error||"Falha na consulta");return d})
-    .then(d=>{if(live){setSummaryMeta(d);setSummaryMetaError(d.partial?"Consulta parcial de contas":"");}})
-    .catch(e=>{if(live){setSummaryMeta(null);setSummaryMetaError(String(e.message||e));}}).finally(()=>{if(live)setSummaryMetaLoading(false)});
+    .then(d=>{if(live){setSummaryMeta(d);setSummaryMetaError(d.partial?"Consulta parcial de contas":"");if(summaryAdAccount==="all"&&d.accounts)setSpendAccounts(d.accounts.map((a:MetaAccount)=>({account_id:a.account_id,name:a.name})));try{if(!d.partial)sessionStorage.setItem(cacheKey,JSON.stringify({savedAt:Date.now(),data:d}));}catch{}}})
+    .catch(e=>{if(live){setSummaryMeta(previous);setSummaryMetaError("Consulta recente indisponível: "+String(e.message||e));}}).finally(()=>{if(live)setSummaryMetaLoading(false)});
     return()=>{live=false};
   },[dashboardKey,activeTab,selectedDate,periodDays,summaryAdAccount]);
   const revenue = approved.reduce((sum, row) => sum + (row.value ?? 0), 0);
