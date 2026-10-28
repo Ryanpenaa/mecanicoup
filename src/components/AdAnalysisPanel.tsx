@@ -47,6 +47,16 @@ function evaluation(m:Metrics,period:number,unreliable:boolean){
 }
 const toneClass:Record<string,string>={green:"bg-emerald-50 text-emerald-800 border-emerald-200",red:"bg-rose-50 text-rose-800 border-rose-200",amber:"bg-amber-50 text-amber-800 border-amber-200",blue:"bg-blue-50 text-blue-800 border-blue-200",slate:"bg-slate-100 text-slate-600 border-slate-200"};
 const dateLabel=(date:string)=>date.split("-").reverse().join("/");
+const snapshotStats=(snapshot:Snapshot)=>{
+ const accounts=new Map((snapshot.payload.accounts||[]).map(a=>[a.account_id,a]));
+ const metrics=(snapshot.payload.ads||[]).map(a=>totals(a,accounts.get(a.account_id),1,snapshot.review_date));
+ return {
+   spend:metrics.reduce((sum,m)=>sum+(Number.isFinite(m.spend)?m.spend:0),0),
+   sales:metrics.reduce((sum,m)=>sum+m.trackupSales,0),
+   metaSales:metrics.reduce((sum,m)=>sum+m.metaSales,0),
+   checkouts:metrics.reduce((sum,m)=>sum+m.checkouts,0),
+ };
+};
 export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
  const [data,setData]=useState<Report|null>(null),[history,setHistory]=useState<Snapshot[]>([]);
  const [loading,setLoading]=useState(true),[refreshing,setRefreshing]=useState(false),[error,setError]=useState("");
@@ -112,10 +122,21 @@ export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
      {WINDOWS.map(w=>{
        const snapshot=history.find(x=>x.review_date===clock.date&&x.slot===w.id);
        const active=currentWindow?.id===w.id;
+       const earlierSlot=w.id==="tarde"?"manha":w.id==="noite"?"tarde":null;
+       const earlier=earlierSlot?history.find(x=>x.review_date===clock.date&&x.slot===earlierSlot):null;
+       const stats=snapshot?snapshotStats(snapshot):null;
+       const previous=earlier?snapshotStats(earlier):null;
        return <div key={w.id} className={"rounded-2xl border bg-white p-4 "+(active?"border-blue-400 ring-1 ring-blue-200":"border-slate-200")}>
          <div className="flex items-center justify-between gap-2"><p className="flex items-center gap-2 text-sm font-extrabold"><Clock3 className="h-4 w-4 text-blue-600"/>{w.name}</p><span className="text-xs font-bold text-slate-500">{w.range}</span></div>
          <p className="mt-2 text-sm font-bold text-slate-700">{snapshot?"Leitura registrada":active?"Janela de análise aberta":"Aguardando leitura"}</p>
-         <p className="mt-1 text-xs text-slate-500">{snapshot?"Capturada às "+new Date(snapshot.captured_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Porto_Velho"}):"Registro automático ao abrir a aba nesta faixa de horário"}</p>
+         <p className="mt-1 text-xs text-slate-500">{snapshot?"Capturada às "+new Date(snapshot.captured_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Porto_Velho"}):"Registro agendado, mesmo com o painel fechado."}</p>
+         {stats&&<div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
+           <div><p className="text-[11px] text-slate-500">Gasto acumulado</p><p className="text-sm font-extrabold tabular-nums">{money(stats.spend)}</p></div>
+           <div><p className="text-[11px] text-slate-500">Vendas identificadas</p><p className="text-sm font-extrabold tabular-nums">{stats.sales} TrackUp</p></div>
+           <div><p className="text-[11px] text-slate-500">Compras Meta</p><p className="text-sm font-bold tabular-nums">{stats.metaSales}</p></div>
+           <div><p className="text-[11px] text-slate-500">Checkouts Meta</p><p className="text-sm font-bold tabular-nums">{stats.checkouts}</p></div>
+         </div>}
+         {stats&&previous&&<p className="mt-3 border-t border-slate-100 pt-2 text-xs font-medium text-slate-600">Desde {earlierSlot==="manha"?"a manhã":"a tarde"}: {money(stats.spend-previous.spend)} de gasto · {stats.sales-previous.sales>=0?"+":""}{stats.sales-previous.sales} vendas identificadas</p>}
        </div>;
      })}
    </div>
@@ -132,7 +153,7 @@ export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
        <div className="rounded-xl border bg-white p-4"><p className="text-xs font-bold text-slate-500">Compras atribuídas pela Meta</p><p className="mt-2 text-xl font-black tabular-nums">{number(sumMeta)}</p><p className="mt-1 text-xs text-slate-500">Informação independente</p></div>
        <div className="rounded-xl border bg-white p-4"><p className="text-xs font-bold text-slate-500">ROAS das vendas identificadas</p><p className="mt-2 text-xl font-black tabular-nums">{unreliable||sumSpend===0?"—":number(sumRevenue/sumSpend,2)+"x"}</p><p className="mt-1 text-xs text-slate-500">{totalAds} anúncios encontrados</p></div>
      </div>
-     <p className="text-xs leading-relaxed text-slate-500">Última consulta: {new Date(data.generated_at).toLocaleString("pt-BR",{timeZone:"America/Porto_Velho"})} · {data.attribution.matched} de {data.attribution.approved} vendas aprovadas com atribuição por criativo nos últimos 30 dias. Gastos convertidos para BRL; USD = R$ 5,50, exceto 27–28/10/2026 (R$ 5,82). Janelas são registradas quando a aba está aberta; fora delas o botão salva uma leitura extra.</p>
+     <p className="text-xs leading-relaxed text-slate-500">Última consulta: {new Date(data.generated_at).toLocaleString("pt-BR",{timeZone:"America/Porto_Velho"})} · {data.attribution.matched} de {data.attribution.approved} vendas aprovadas com atribuição por criativo nos últimos 30 dias. Gastos convertidos para BRL; USD = R$ 5,50, exceto 27–28/10/2026 (R$ 5,82). Capturas agendadas às 06h45, 12h45 e 19h45 (RO), mesmo sem a aba aberta. Fora das janelas, o botão salva uma leitura extra.</p>
      {data.warnings?.length>0&&<div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><AlertTriangle className="mr-1 inline h-4 w-4"/>Dados com ressalvas: {data.warnings.join(" · ")}</div>}
      <label className="relative block"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400"/><input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar anúncio, conjunto ou campanha" className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none focus:border-blue-500"/></label>
      {!data.accounts.length&&<p className="rounded-xl bg-white p-5 text-sm text-slate-600">Nenhuma conta ativa autorizada foi retornada pela Meta. As duas contas permitidas permanecem configuradas na integração.</p>}
