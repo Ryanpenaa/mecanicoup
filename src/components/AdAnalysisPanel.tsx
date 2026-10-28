@@ -80,8 +80,14 @@ export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
      const windowId=WINDOWS.find(w=>p.hour>=w.start&&p.hour<w.end)?.id;
      const slot=force?(windowId||"extra"):(windowId&&lastCapture!==p.date+":"+windowId?windowId:null);
      if(slot)lastCapture=p.date+":"+slot;
-     if(force)setRefreshing(true);else if(!data)setLoading(true);
+     if(force)setRefreshing(true);
      try {
+       if(force){
+         const syncUrl="https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/trackup-meta-sync?"+new URLSearchParams({start:p.date,end:p.date,force:"1"});
+         const synced=await fetch(syncUrl,{headers});
+         const outcome=await synced.json();
+         if(!synced.ok||!outcome.ok)throw Error("Não foi possível atualizar a Meta: "+(outcome.errors?.[0]?.error||outcome.error||"erro"));
+       }
        const result=await query(slot?"capture":"overview",slot||undefined);
        if(mounted){setData(result);setError("");try{sessionStorage.setItem("trackup_ad_review_v1_"+result.date,JSON.stringify({key:dashboardKey,savedAt:Date.now(),report:result}))}catch{}if(slot)void loadHistory();}
      }catch(e){if(mounted)setError(e instanceof Error?e.message:"Falha na análise");}
@@ -98,7 +104,7 @@ export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
      }
    }catch{}
    void Promise.all([load(tick>0),loadHistory()]);
-   const timer=window.setInterval(()=>{const p=localParts(),slot=WINDOWS.find(w=>p.hour>=w.start&&p.hour<w.end)?.id;setClock(p);if(slot&&lastCapture!==p.date+":"+slot)void load(false);},60000);
+   const timer=window.setInterval(()=>{setClock(localParts());void load(false);},60000);
    return()=>{mounted=false;window.clearInterval(timer);};
  },[dashboardKey,tick]);
  const currentDate=data?.date||clock.date;
