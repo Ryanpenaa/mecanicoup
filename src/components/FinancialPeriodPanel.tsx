@@ -1,8 +1,9 @@
 import {useEffect,useMemo,useState} from "react";
-import {Download,RefreshCw,CalendarRange,TrendingUp,TrendingDown} from "lucide-react";
+import {Download,RefreshCw,CalendarRange} from "lucide-react";
 
 const ROOT="https://xahydzcmpikbioeyvwst.supabase.co/functions/v1";
 const EXCLUDED=new Set(["1593509388682189","2220129438533853","1160571526431916"]);
+const EXCLUDE_PARAM=[...EXCLUDED].join(",");
 const STORAGE_PREFIX="trackup_finance_period_v1_";
 const money=(v:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
 const numeric=(v:number)=>new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(v);
@@ -55,7 +56,7 @@ export function FinancialPeriodPanel({dashboardKey,onResult}:{dashboardKey:strin
      try{
        const headers={"x-dashboard-key":dashboardKey};
        const salesUrl=ROOT+"/tracking-daily-revenue?"+new URLSearchParams({start:applied.start,end:applied.end});
-       const adUrl=ROOT+"/meta-spend-summary?"+new URLSearchParams({date:applied.end,range:"custom",start:applied.start,end:applied.end,daily:"1",account_id:"all"});
+       const adUrl=ROOT+"/meta-spend-summary?"+new URLSearchParams({date:applied.end,range:"custom",start:applied.start,end:applied.end,daily:"1",account_id:"all",exclude:EXCLUDE_PARAM});
        const [saleResponse,adResponse]=await Promise.all([fetch(salesUrl,{headers,cache:"no-store"}),fetch(adUrl,{headers,cache:"no-store"})]);
        const [sales,ads]=await Promise.all([saleResponse.json(),adResponse.json()]);
        if(!saleResponse.ok||!sales.ok||!Array.isArray(sales.days))throw Error(sales.error||"Não foi possível consultar as vendas deste período.");
