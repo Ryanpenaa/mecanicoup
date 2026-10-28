@@ -135,14 +135,14 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
       setAttribution(data.attribution||{});
       setAttributionSummary(data.attribution_summary||null);
       setPixelAudit(data.pixel_audit||null);
-      setMessage((data.ads||[]).length+" anúncios encontrados em "+date+".");
+      setMessage((data.ads||[]).length+" anúncios encontrados em "+date+(data.partial?" · Histórico sendo carregado.":" · Dados armazenados no Supabase."));
     } catch(e) {setMessage(e instanceof Error?e.message:"Não foi possível consultar a Meta.");}
     finally {if(!silent)setBusy(false);}
   };
   useEffect(()=>{
     if(!selectedAccount)return;
     void load();
-    const timer=window.setInterval(()=>{void load(true);},60000);
+    const timer=window.setInterval(()=>{void load(true);},15000);
     return ()=>window.clearInterval(timer);
   },[selectedAccount,date,dashboardKey]);
   const metrics=new Map<string,{id:string;name:string;spend:number;clicks:number;impressions:number;link_clicks:number;reach:number;actions:Record<string,number>;values:Record<string,number>;trackupPurchases:number;trackupRevenue:number;count:number}>();
@@ -953,7 +953,7 @@ function Index() {
     .then(d=>{if(live){setSummaryMeta(d);setSummaryMetaError(d.partial?"Consulta parcial de contas":"");if(summaryAdAccount==="all"&&d.accounts)setSpendAccounts(d.accounts.map((a:MetaAccount)=>({account_id:a.account_id,name:a.name})));try{if(!d.partial)sessionStorage.setItem(cacheKey,JSON.stringify({savedAt:Date.now(),data:d}));}catch{}}})
     .catch(e=>{if(live){setSummaryMeta(previous);setSummaryMetaError("Consulta recente indisponível: "+String(e.message||e));}}).finally(()=>{if(live)setSummaryMetaLoading(false)});
     void poll();
-    const timer=window.setInterval(()=>void poll(),60000);
+    const timer=window.setInterval(()=>void poll(),15000);
     return()=>{live=false;window.clearInterval(timer)};
   },[dashboardKey,activeTab,selectedDate,periodDays,summaryAdAccount]);
   const revenue = approved.reduce((sum, row) => sum + (row.value ?? 0), 0);
@@ -1257,7 +1257,7 @@ function Index() {
           </div>)}
         </section>
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-base font-bold">Indicadores Meta Ads</h2><p className="text-xs text-slate-500">Métricas gerais do Meta, podendo incluir contas excluídas do fechamento Vega/Appmax. Use o quadro financeiro acima para gasto e resultado válidos.</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={()=>setEditCards(true)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-blue-700">Escolher métricas</button><button type="button" onClick={()=>{const defaults=["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];setVisibleMetaCards(defaults);localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(defaults))}} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold">Restaurar padrão</button><span className="text-xs text-slate-500">{summaryMetaLoading?"Consultando Meta Ads...":summaryMetaError||(!m?"Selecione uma conta com dados":"Dados da API Meta")}</span></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-base font-bold">Indicadores Meta Ads</h2><p className="text-xs text-slate-500">Métricas gerais do Meta, podendo incluir contas excluídas do fechamento Vega/Appmax. Use o quadro financeiro acima para gasto e resultado válidos.</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={()=>setEditCards(true)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-blue-700">Escolher métricas</button><button type="button" onClick={()=>{const defaults=["spend","impressions","link_clicks","cpc_link","ctr_link","checkouts","purchases","roas"];setVisibleMetaCards(defaults);localStorage.setItem("trackup_meta_summary_cards",JSON.stringify(defaults))}} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold">Restaurar padrão</button><span className="text-xs text-slate-500">{summaryMetaLoading?"Consultando Meta Ads...":summaryMetaError||(!m?"Selecione uma conta com dados":"Dados armazenados no Supabase")}</span></div></div>
           {m&&<p className="mt-3 text-xs text-slate-500">Indicadores financeiros convertidos para BRL pela cotação de referência em {selectedDate}. Em períodos de vários dias, esta seção usa a cotação da data final e pode diferir do fechamento diário Vega/Appmax, que segue R$ 5,50 e R$ 5,82 nas datas especiais. ROAS é calculado sobre os valores convertidos. Alcance entre contas não é deduplicado.</p>}
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{metricCatalog.filter(c=>visibleMetaCards.includes(c.key)).map(c=><div key={c.key} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4"><p className="text-xs font-bold text-slate-500">{c.title}</p><p className="mt-3 text-2xl font-extrabold text-slate-950">{m?c.value:"—"}</p><p className="mt-1 text-[11px] text-slate-400">Meta Ads · {periodDays==="1"?"Hoje":periodDays+" dias"}</p></div>)}</div>
           {!visibleMetaCards.length&&<p className="mt-3 text-sm text-slate-500">Nenhuma métrica selecionada. Clique em Escolher métricas ou Restaurar padrão.</p>}
