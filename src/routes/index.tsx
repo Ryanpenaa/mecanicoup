@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TrackUpChat } from "../components/TrackUpChat";
 import { AdAnalysisPanel } from "../components/AdAnalysisPanel";
 import { FinancialPeriodPanel, clearFinancialPeriodCache, type PeriodFinancialTotal } from "../components/FinancialPeriodPanel";
@@ -634,6 +634,25 @@ const FINANCE_API="https://xahydzcmpikbioeyvwst.supabase.co/functions/v1";
 const financeDollar=(day:string)=>day==="2026-10-27"||day==="2026-10-28"?5.82:5.5;
 type DailyClose={date:string;income:number;orders:number;spend:number;usd:number;fx:number;partial:boolean;fetchedAt:number;cached?:boolean};
 const DAILY_CLOSE_CACHE_PREFIX="trackup_finance_day_v3_";
+
+const DASHBOARD_SNAPSHOT_PREFIX="trackup_dashboard_snapshot_v1_";
+type SnapshotCache={savedAt:number;key:string;date:string;body:DashboardResponse};
+function readDashboardSnapshot(key:string,date:string):DashboardResponse|null{
+  if(typeof window==="undefined")return null;
+  try{
+    const raw=sessionStorage.getItem(DASHBOARD_SNAPSHOT_PREFIX+date);
+    if(!raw)return null;
+    const s=JSON.parse(raw) as SnapshotCache;
+    // Data from a previous session is always revalidated, never silently treated as live.
+    if(s.key!==key||s.date!==date||!s.body?.ok||!Number.isFinite(s.savedAt)||Date.now()-s.savedAt>8*3600000)return null;
+    return s.body;
+  }catch{return null}
+}
+function saveDashboardSnapshot(key:string,date:string,body:DashboardResponse){
+  if(typeof window==="undefined")return;
+  try{sessionStorage.setItem(DASHBOARD_SNAPSHOT_PREFIX+date,JSON.stringify({key,date,savedAt:Date.now(),body}))}catch{}
+}
+
 function readDailyCloseCache(date:string):DailyClose|null{
   if(typeof window==="undefined")return null;
   try{
@@ -650,6 +669,8 @@ function saveDailyCloseCache(value:DailyClose){
 }
 function Index() {
   const [dashboardKey, setDashboardKey] = useState<string | null>(null);
+  const dashboardUpdatedRef=useRef<{key:string;date:string;time:number}|null>(null);
+  const dashboardInFlightRef=useRef<string|null>(null);
   const [rows, setRows] = useState<Transaction[]>([]);
   const [financial,setFinancial]=useState<DashboardResponse["financial"]>(undefined);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
@@ -728,6 +749,9 @@ function Index() {
   };
 
   async function fetchDashboard(key: string, quiet = false) {
+    const requestId=key+"|"+selectedDate;
+    if(dashboardInFlightRef.current===requestId)return false;
+    dashboardInFlightRef.current=requestId;
     if (!quiet) setRefreshing(true);
     try {
       const response = await fetch(
@@ -771,6 +795,8 @@ function Index() {
       );
       setCreativeQuality(body.traffic?.creatives ?? []);
       setGeneratedAt(body.generated_at ?? null);
+      saveDashboardSnapshot(key,selectedDate,body);
+      dashboardUpdatedRef.current={key,date:selectedDate,time:Date.now()};
       setError(null);
       return true;
     } catch (err) {
@@ -778,32 +804,35 @@ function Index() {
       return false;
     } finally {
       setLoading(false);
+      if(dashboardInFlightRef.current===requestId)dashboardInFlightRef.current=null;
       if (!quiet) setRefreshing(false);
     }
   }
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) {
-      setLoading(false);
-      return;
-    }
-    setDashboardKey(saved);
-    void fetchDashboard(saved);
+    const saved=localStorage.getItem(STORAGE_KEY);
+    setLoading(false); // Renderiza a interface imediatamente, sem bloquear por requisições lentas.
+    if(saved)setDashboardKey(saved);
   }, []);
 
   useEffect(() => {
-    if (!dashboardKey) return;
-    const timer = window.setInterval(() => {
-      void fetchDashboard(dashboardKey, true);
-    }, 10000);
-    return () => window.clearInterval(timer);
-  }, [dashboardKey, selectedDate]);
-
-  useEffect(() => {
-    if (!dashboardKey) return;
-    void fetchDashboard(dashboardKey, true);
-  }, [dashboardKey, selectedDate]);
+    if(!dashboardKey)return;
+    const snapshot=readDashboardSnapshot(dashboardKey,selectedDate);
+    if(snapshot){
+      setRows(snapshot.rows??[]);
+      setFinancial(snapshot.financial);
+      setMetaCapiEnabled(Boolean(snapshot.meta_capi_enabled));
+      setTrafficSummary(snapshot.traffic?.summary??{visits:0,engaged_15s:0,scroll_50:0,scroll_75:0,view_plans:0,select_plan:0,checkout_click:0,pix_generated:0,purchases:0});
+      setCreativeQuality(snapshot.traffic?.creatives??[]);
+      setGeneratedAt(snapshot.generated_at??null);
+    }
+    const last=dashboardUpdatedRef.current;
+    if(!last||last.key!==dashboardKey||last.date!==selectedDate||Date.now()-last.time>=15000)
+      void fetchDashboard(dashboardKey,true);
+    // Atualiza vendas automaticamente, mas sem múltiplas consultas simultâneas.
+    const timer=window.setInterval(()=>void fetchDashboard(dashboardKey,true),30000);
+    return()=>window.clearInterval(timer);
+  },[dashboardKey,selectedDate]);
 
 
   useEffect(()=>{
@@ -865,6 +894,7 @@ function Index() {
 
   function logout() {
     clearFinancialPeriodCache();
+    try{for(let i=sessionStorage.length-1;i>=0;i--){const k=sessionStorage.key(i);if(k?.startsWith(DASHBOARD_SNAPSHOT_PREFIX))sessionStorage.removeItem(k)}}catch{}
     localStorage.removeItem(STORAGE_KEY);
     for(const key of Object.keys(localStorage))if(key.startsWith(DAILY_CLOSE_CACHE_PREFIX))localStorage.removeItem(key);
     setDashboardKey(null);
