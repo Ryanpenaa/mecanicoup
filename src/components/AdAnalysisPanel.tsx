@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, ArrowUpRight, BarChart3, CheckCircle2, Clock3, Loader2, RefreshCw, Search, ShieldCheck, TrendingUp } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, BarChart3, CheckCircle2, Clock3, Loader2, RefreshCw, Search, ShieldCheck, TrendingUp } from "lucide-react";
 
 const ENDPOINT = "https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/trackup-ad-review";
 type Day = {date:string;spend:number;clicks:number;link_clicks:number;impressions:number;checkouts:number;meta_purchases:number;trackup_purchases:number;trackup_revenue_brl:number};
@@ -76,7 +76,7 @@ export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
      }catch(e){if(mounted)setError(e instanceof Error?e.message:"Falha na análise");}
      finally{if(mounted){setLoading(false);setRefreshing(false)}}
    };
-   void Promise.all([load(true===false),loadHistory()]);
+   void Promise.all([load(tick>0),loadHistory()]);
    const timer=window.setInterval(()=>{const p=localParts(),slot=WINDOWS.find(w=>p.hour>=w.start&&p.hour<w.end)?.id;setClock(p);if(slot&&lastCapture!==p.date+":"+slot)void load(false);},60000);
    return()=>{mounted=false;window.clearInterval(timer);};
  },[dashboardKey,tick]);
