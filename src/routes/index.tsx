@@ -835,7 +835,7 @@ function Index() {
     if(!last||last.key!==dashboardKey||last.date!==selectedDate||Date.now()-last.time>=15000)
       void fetchDashboard(dashboardKey,true);
     // Atualiza vendas automaticamente, mas sem múltiplas consultas simultâneas.
-    const timer=window.setInterval(()=>void fetchDashboard(dashboardKey,true),30000);
+    const timer=window.setInterval(()=>void fetchDashboard(dashboardKey,true),15000);
     return()=>window.clearInterval(timer);
   },[dashboardKey,selectedDate]);
 
@@ -884,7 +884,7 @@ function Index() {
     };
     if(shouldRefresh)void load();
     // Today updates every minute; historical dates are refreshed less often.
-    const timer=window.setInterval(()=>{void load()},selectedDate===todayDateKey()?60000:600000);
+    const timer=window.setInterval(()=>{void load()},selectedDate===todayDateKey()?15000:600000);
     return()=>{alive=false;window.clearInterval(timer)};
   },[dashboardKey,selectedDate,dailyCloseRefresh]);
 
