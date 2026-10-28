@@ -630,7 +630,22 @@ function Unlock({
 const FINANCE_EXCLUDED_IDS=new Set(["1593509388682189","2220129438533853","1160571526431916"]);
 const FINANCE_API="https://xahydzcmpikbioeyvwst.supabase.co/functions/v1";
 const financeDollar=(day:string)=>day==="2026-10-27"||day==="2026-10-28"?5.82:5.5;
-type DailyClose={date:string;income:number;orders:number;spend:number;usd:number;fx:number;partial:boolean};
+type DailyClose={date:string;income:number;orders:number;spend:number;usd:number;fx:number;partial:boolean;fetchedAt:number;cached?:boolean};
+const DAILY_CLOSE_CACHE_PREFIX="trackup_finance_day_v3_";
+function readDailyCloseCache(date:string):DailyClose|null{
+  if(typeof window==="undefined")return null;
+  try{
+    const raw=localStorage.getItem(DAILY_CLOSE_CACHE_PREFIX+date);
+    if(!raw)return null;
+    const value=JSON.parse(raw) as DailyClose;
+    if(value.date!==date||!Number.isFinite(value.income)||!Number.isFinite(value.spend)||!Number.isFinite(value.fetchedAt)||value.fetchedAt>Date.now()||Date.now()-value.fetchedAt>24*3600000)return null;
+    return {...value,cached:true};
+  }catch{return null}
+}
+function saveDailyCloseCache(value:DailyClose){
+  if(typeof window==="undefined"||value.partial)return;
+  try{localStorage.setItem(DAILY_CLOSE_CACHE_PREFIX+value.date,JSON.stringify({...value,cached:false}))}catch{}
+}
 function Index() {
   const [dashboardKey, setDashboardKey] = useState<string | null>(null);
   const [rows, setRows] = useState<Transaction[]>([]);
@@ -642,9 +657,10 @@ function Index() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("approved");
   const [selectedDate, setSelectedDate] = useState(() => todayDateKey());
-  const [dailyClose,setDailyClose]=useState<DailyClose|null>(null);
+  const [dailyClose,setDailyClose]=useState<DailyClose|null>(()=>readDailyCloseCache(todayDateKey()));
   const [dailyCloseError,setDailyCloseError]=useState("");
   const [dailyCloseLoading,setDailyCloseLoading]=useState(true);
+  const [dailyCloseRefresh,setDailyCloseRefresh]=useState(0);
   const [activeTab, setActiveTab] = useState<"summary" | "transactions" | "traffic" | "ads">("summary");
   const [visibleCards,setVisibleCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_summary_visible_v3")||"null");return Array.isArray(v)?v:["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}catch{return ["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}});
   const [editCards,setEditCards]=useState(false);
@@ -789,33 +805,50 @@ function Index() {
   useEffect(()=>{
     if(!dashboardKey){setDailyClose(null);return}
     let alive=true;
+    const cached=readDailyCloseCache(selectedDate);
+    setDailyClose(cached);
+    setDailyCloseError("");
+    // Reopen an already consulted date instantly; only refresh when its snapshot is due.
+    const freshness=selectedDate===todayDateKey()?45000:10*60*1000;
+    const shouldRefresh=dailyCloseRefresh>0||!cached||Date.now()-cached.fetchedAt>freshness;
+    setDailyCloseLoading(shouldRefresh);
     const load=async()=>{
+      if(!alive)return;
+      setDailyCloseLoading(true);
       try{
         const headers={"x-dashboard-key":dashboardKey};
+        // Dedicated revenue endpoint avoids loading sessions, events and payment charts.
         const [salesRes,metaRes]=await Promise.all([
-          fetch(FINANCE_API+"/tracking-period-summary?"+new URLSearchParams({start:selectedDate,end:selectedDate,offer:"all"}),{headers,cache:"no-store"}),
+          fetch(FINANCE_API+"/tracking-daily-revenue?"+new URLSearchParams({date:selectedDate}),{headers,cache:"no-store"}),
           fetch(FINANCE_API+"/meta-spend-summary?"+new URLSearchParams({date:selectedDate,range:"today",account_id:"all"}),{headers,cache:"no-store"})
         ]);
         const [sales,meta]=await Promise.all([salesRes.json(),metaRes.json()]);
-        if(!salesRes.ok||!sales.ok||!sales.metrics)throw Error(sales.error||"Falha nas vendas aprovadas");
+        if(!salesRes.ok||!sales.ok||!Number.isFinite(Number(sales.revenue_cents)))throw Error(sales.error||"Falha nas vendas aprovadas");
         if(!metaRes.ok||!meta.ok||!Array.isArray(meta.accounts))throw Error(meta.error||"Falha nos gastos de anúncios");
         const accounts=meta.accounts.filter((a:{account_id:string})=>!FINANCE_EXCLUDED_IDS.has(String(a.account_id)));
         const usd=accounts.filter((a:{currency:string})=>a.currency==="USD").reduce((v:number,a:{spend:number})=>v+Number(a.spend||0),0);
         const brl=accounts.filter((a:{currency:string})=>a.currency==="BRL").reduce((v:number,a:{spend:number})=>v+Number(a.spend||0),0);
         const partial=Boolean(meta.partial)||Boolean(meta.errors?.length)||accounts.some((a:{currency:string})=>!["USD","BRL"].includes(a.currency));
         const fx=financeDollar(selectedDate);
+        const result:DailyClose={date:selectedDate,income:Number(sales.revenue_cents)/100,orders:Number(sales.approved||0),spend:Math.round((usd*fx+brl)*100)/100,usd:Math.round(usd*100)/100,fx,partial,fetchedAt:Date.now(),cached:false};
         if(alive){
-          setDailyClose({date:selectedDate,income:Number(sales.metrics.revenue_cents||0)/100,orders:Number(sales.metrics.approved||0),spend:Math.round((usd*fx+brl)*100)/100,usd:Math.round(usd*100)/100,fx,partial});
+          setDailyClose(result);
           setDailyCloseError("");
+          saveDailyCloseCache(result);
         }
-      }catch(e){if(alive){setDailyClose(null);setDailyCloseError(e instanceof Error?e.message:"Erro no fechamento financeiro")}}
-      finally{if(alive)setDailyCloseLoading(false)}
+      }catch(e){
+        if(alive){
+          // Do not erase the last known total when Meta is slow or temporarily unavailable.
+          setDailyClose(previous=>previous?.date===selectedDate?{...previous,cached:true}:null);
+          setDailyCloseError(e instanceof Error?e.message:"Erro no fechamento financeiro");
+        }
+      }finally{if(alive)setDailyCloseLoading(false)}
     };
-    setDailyCloseLoading(true);setDailyClose(null);setDailyCloseError("");
-    void load();
-    const timer=window.setInterval(()=>{void load()},60000);
+    if(shouldRefresh)void load();
+    // Today updates every minute; historical dates are refreshed less often.
+    const timer=window.setInterval(()=>{void load()},selectedDate===todayDateKey()?60000:600000);
     return()=>{alive=false;window.clearInterval(timer)};
-  },[dashboardKey,selectedDate]);
+  },[dashboardKey,selectedDate,dailyCloseRefresh]);
 
   async function unlock(key: string) {
     const ok = await fetchDashboard(key);
@@ -828,6 +861,7 @@ function Index() {
 
   function logout() {
     localStorage.removeItem(STORAGE_KEY);
+    for(const key of Object.keys(localStorage))if(key.startsWith(DAILY_CLOSE_CACHE_PREFIX))localStorage.removeItem(key);
     setDashboardKey(null);
     setRows([]);
   }
@@ -1141,7 +1175,8 @@ function Index() {
               <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600">Outra data
                 <input aria-label="Data do fechamento financeiro" type="date" max={todayDateKey()} value={selectedDate} onChange={e=>{if(e.target.value&&e.target.value<=todayDateKey())setSelectedDate(e.target.value)}} className="min-w-0 rounded bg-transparent px-1 py-1 text-xs font-bold text-slate-800 outline-none"/>
               </label>
-              <span className="text-xs text-slate-500">{dailyCloseLoading?"Consultando histórico…":currentClose?"Dados carregados":"Sem dados"}</span>
+              <button type="button" onClick={()=>setDailyCloseRefresh(v=>v+1)} disabled={dailyCloseLoading} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Atualizar agora</button>
+              <span className="text-xs text-slate-500">{dailyCloseLoading?(currentClose?"Exibindo dados salvos · atualizando…":"Consultando…"):currentClose?(currentClose.cached?"Dados salvos":"Atualizado"):"Sem dados"}</span>
             </div>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -1151,6 +1186,7 @@ function Index() {
           </div>
           {dailyCloseError&&<p role="alert" className="mt-3 text-xs font-medium text-rose-700">{dailyCloseError}</p>}
           {currentClose?.partial&&<p role="alert" className="mt-3 text-xs text-amber-700">A Meta retornou dados parciais: o resultado foi ocultado para não induzir a erro.</p>}
+          {currentClose&&<p className="mt-2 text-[11px] text-slate-500">Última consulta: {new Date(currentClose.fetchedAt).toLocaleString("pt-BR",{timeZone:DASHBOARD_TIME_ZONE,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}{currentClose.cached?" · valores salvos, sujeitos a atualização":""}</p>}
           <p className="mt-3 text-xs leading-5 text-slate-500">Use Hoje, Ontem ou o calendário para consultar qualquer data com registros; a data selecionada também atualiza os demais indicadores do painel. Vendas aprovadas registradas no TrackUp, sem somar as compras atribuídas pela Meta. Anúncios: contas acessíveis, exceto 1593509388682189, 2220129438533853 e 1160571526431916. Dólar R$ 5,50; em 27 e 28/10/2026, R$ 5,82. Pode haver atraso dos webhooks e diferença de fuso das contas de anúncio. Não inclui taxas Vega/Appmax, impostos, reembolsos posteriores ou despesas pessoais. Não representa lucro líquido nem saldo para saque.</p>
         </section><div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white p-3"><p className="text-sm font-bold">Visão geral · indicadores diários e históricos</p><select aria-label="Conta de anúncios do resumo" value={summaryAdAccount} onChange={e=>{setSummaryAdAccount(e.target.value);setSummaryMeta(null)}} className="rounded-lg border p-2 text-xs"><option value="all">Todas as contas Meta</option>{spendAccounts.map(a=><option key={a.account_id} value={a.account_id}>{a.name}</option>)}</select><select aria-label="Período do funil" className="rounded-lg border p-2" value={periodDays} onChange={e=>setPeriodDays(e.target.value)}><option value="1">Hoje</option><option value="3">Últimos 3 dias</option><option value="7">Últimos 7 dias</option><option value="14">Últimos 14 dias</option><option value="30">Últimos 30 dias</option></select><select aria-label="Filtrar oferta" value={selectedOffer} onChange={e=>setSelectedOffer(e.target.value)} className="rounded-lg border p-2 text-xs"><option value="all">Todas as ofertas</option>{financial?.offers?.filter(o=>o.currency==="BRL").map(o=><option key={o.offer_key} value={o.offer_key}>{o.name}</option>)}</select><button type="button" onClick={()=>setEditCards(v=>!v)} className="rounded-lg border px-3 py-2 text-xs font-bold">{editCards?"Concluir":"Personalizar indicadores"}</button></div>{editCards&&<div className="flex flex-wrap gap-3 rounded-xl bg-white p-3"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showFunnel} onChange={e=>{setShowFunnel(e.target.checked);localStorage.setItem("trackup_show_funnel",String(e.target.checked))}}/>Mostrar funil</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={showPayments} onChange={e=>{setShowPayments(e.target.checked);localStorage.setItem("trackup_show_payments",String(e.target.checked))}}/>Pagamentos</label><label className="flex gap-2 text-xs"><input type="checkbox" checked={showOffersPie} onChange={e=>{setShowOffersPie(e.target.checked);localStorage.setItem("trackup_show_offers_pie",String(e.target.checked))}}/>Pizza por oferta</label>{["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"].map(label=><label key={label} className="flex gap-2 text-xs"><input type="checkbox" checked={visibleCards.includes(label)} onChange={()=>setVisibleCards(v=>{const next=v.includes(label)?v.filter(x=>x!==label):[...v,label];localStorage.setItem("trackup_summary_visible_v3",JSON.stringify(next));return next;})}/>{label}</label>)}<div className="w-full border-t pt-3"><p className="mb-2 text-xs font-bold text-slate-500">Métricas Meta Ads — marcar para exibir</p><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{metricCatalog.map(card=><label key={card.key} className="flex items-center gap-2 rounded-lg border p-2 text-xs"><input type="checkbox" checked={visibleMetaCards.includes(card.key)} onChange={()=>toggleMetaCard(card.key)}/>{card.title}</label>)}</div></div></div>}        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo das vendas e rastreamento">
           {[
