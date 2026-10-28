@@ -104,7 +104,7 @@ export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
      }
    }catch{}
    void Promise.all([load(tick>0),loadHistory()]);
-   const timer=window.setInterval(()=>{setClock(localParts());void load(false);},60000);
+   const timer=window.setInterval(()=>{setClock(localParts());void load(false);},15000);
    return()=>{mounted=false;window.clearInterval(timer);};
  },[dashboardKey,tick]);
  const currentDate=data?.date||clock.date;
@@ -130,7 +130,7 @@ export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
  return <section className="min-w-0 space-y-5" aria-label="Análise diária de anúncios por BM e conta">
    <div className="flex flex-wrap items-start justify-between gap-3">
      <div><div className="flex items-center gap-2"><BarChart3 className="h-6 w-6 text-blue-600"/><h2 className="text-xl font-extrabold text-slate-950">Análise de Anúncios</h2></div>
-       <p className="mt-1 text-sm text-slate-500">Leitura por anúncio, separada automaticamente por BM e conta ativa. Sem selecionar contas.</p></div>
+       <p className="mt-1 text-sm text-slate-500">Leitura por anúncio, separada automaticamente por BM e conta ativa. Sem selecionar contas.</p><p className="mt-1 text-xs text-blue-700">Supabase: histórico permanente · Meta: atualização automática a cada minuto · Painel: leitura a cada 15 segundos.</p></div>
      <button type="button" disabled={loading||refreshing} onClick={()=>setTick(n=>n+1)} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">
        <RefreshCw className={"h-4 w-4 "+(refreshing?"animate-spin":"")}/>Registrar leitura agora
      </button>
