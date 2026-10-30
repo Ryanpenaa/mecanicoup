@@ -297,6 +297,7 @@ function MetaAdsPanel({dashboardKey,date,approvedCount,approvedRevenue}:{dashboa
 type FbcStatus = "ok" | "missing" | "mismatch" | "present";
 
 type Transaction = {
+  source_platform?: "vega" | "appmax";
   transaction_token: string;
   sale_code: string | null;
   tracking_id: string | null;
@@ -638,9 +639,9 @@ const FINANCE_EXCLUDED_IDS=new Set(["1593509388682189","2220129438533853","11605
 const FINANCE_API="https://xahydzcmpikbioeyvwst.supabase.co/functions/v1";
 const financeDollar=(day:string)=>day==="2026-10-27"||day==="2026-10-28"?5.82:5.5;
 type DailyClose={date:string;income:number;orders:number;spend:number;usd:number;fx:number;partial:boolean;fetchedAt:number;cached?:boolean};
-const DAILY_CLOSE_CACHE_PREFIX="trackup_finance_day_v3_";
+const DAILY_CLOSE_CACHE_PREFIX="trackup_finance_day_v4_";
 
-const DASHBOARD_SNAPSHOT_PREFIX="trackup_dashboard_snapshot_v1_";
+const DASHBOARD_SNAPSHOT_PREFIX="trackup_dashboard_snapshot_v2_";
 type SnapshotCache={savedAt:number;key:string;date:string;body:DashboardResponse};
 function readDashboardSnapshot(key:string,date:string):DashboardResponse|null{
   if(typeof window==="undefined")return null;
@@ -745,7 +746,7 @@ function Index() {
   const [searchSales,setSearchSales]=useState("");
   const downloadCsv=()=>{
     const fields:[string,(r:Transaction)=>unknown][]=[
-      ["Identificador",r=>r.sale_code??r.transaction_token],["Status",r=>r.status],["Produto",r=>r.product_name],["Valor",r=>r.value],["Moeda",r=>r.currency],["Aprovada em",r=>r.approved_at],["Campanha",r=>r.utm_campaign],["Criativo",r=>r.utm_content],["Tracking associado",r=>r.tracking_matched],["Enviado pelo TrackUp",r=>r.purchase_sent_by_trackup],["Erro Meta",r=>r.meta_purchase_error]
+      ["Origem",r=>r.source_platform??"vega"],["Identificador",r=>r.sale_code??r.transaction_token],["Status",r=>r.status],["Produto",r=>r.product_name],["Valor",r=>r.value],["Moeda",r=>r.currency],["Aprovada em",r=>r.approved_at],["Campanha",r=>r.utm_campaign],["Criativo",r=>r.utm_content],["Tracking associado",r=>r.tracking_matched],["Enviado pelo TrackUp",r=>r.purchase_sent_by_trackup],["Erro Meta",r=>r.meta_purchase_error]
     ];
     const quote=(v:unknown)=>'"'+String(v??"").replace(/"/g,'""')+'"';
     const csv="\uFEFF"+fields.map(([k])=>quote(k)).join(";")+"\r\n"+dayRows.map(r=>fields.map(([,get])=>quote(get(r))).join(";")).join("\r\n");
@@ -1234,7 +1235,7 @@ function Index() {
             </div>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-800">Vendas aprovadas</p><p className="mt-2 text-2xl font-black tabular-nums text-emerald-900">{currentClose?formatMoney(currentClose.income):"—"}</p><p className="mt-1 text-xs text-emerald-800">{currentClose?currentClose.orders+" compras confirmadas":"Vega via TrackUp"}</p></div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-bold text-emerald-800">Vendas aprovadas</p><p className="mt-2 text-2xl font-black tabular-nums text-emerald-900">{currentClose?formatMoney(currentClose.income):"—"}</p><p className="mt-1 text-xs text-emerald-800">{currentClose?currentClose.orders+" compras confirmadas":"Pagamentos conciliados"}</p></div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-bold text-slate-600">Gasto com anúncios</p><p className="mt-2 text-2xl font-black tabular-nums">{currentClose?formatMoney(currentClose.spend):"—"}</p><p className="mt-1 text-xs text-slate-500">{currentClose?formatMoney(currentClose.usd,"USD")+" · dólar R$ "+currentClose.fx.toFixed(2).replace(".",","):"Sem as três contas excluídas"}</p></div>
             <div className={`rounded-xl border p-4 ${currentBalance===null?"border-slate-200 bg-slate-50":currentBalance>=0?"border-emerald-200 bg-emerald-50":"border-rose-200 bg-rose-50"}`}><p className="text-xs font-bold text-slate-600">Resultado após anúncios</p><p className={`mt-2 text-2xl font-black tabular-nums ${currentBalance===null?"text-slate-600":currentBalance>=0?"text-emerald-800":"text-rose-700"}`}>{currentBalance===null?"—":formatMoney(currentBalance)}</p><p className="mt-1 text-xs text-slate-500">Antes das taxas e retiradas</p></div>
           </div>
@@ -1441,7 +1442,7 @@ function Index() {
           <>
         <section className="grid gap-4 md:grid-cols-3">
           <ConnectionCard
-            name="Vega / AppMax"
+            name="Vega / Appmax"
             detail="Webhook real de transações está chegando ao nosso receptor."
             status="connected"
             icon={ShoppingCart}
@@ -1474,13 +1475,13 @@ function Index() {
           <Metric
             label="Receita aprovada"
             value={formatMoney(revenue)}
-            detail="Somente status approved"
+            detail="Vega + Appmax, sem duplicidades"
             icon={ShoppingCart}
           />
           <Metric
             label="Atraso Vega → TrackUp"
             value={formatDelay(averageDelay)}
-            detail="Aprovação → webhook recebido"
+            detail="Apenas pagamentos Vega com horário de aprovação"
             icon={Clock3}
           />
           <Metric
@@ -1592,8 +1593,7 @@ function Index() {
             <div>
               <h2 className="font-bold text-slate-950">Transações reais</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Horário de aprovação no Vega comparado ao momento em que nosso
-                webhook recebeu a aprovação.
+                Compras únicas conciliadas de Vega + Appmax. A origem de cada pedido está identificada; pagamentos sem UTM permanecem visíveis.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1626,9 +1626,9 @@ function Index() {
                     <th className="px-4 py-3.5 font-semibold">Transação</th>
                     <th className="px-4 py-3.5 font-semibold">Status</th>
                     <th className="px-4 py-3.5 font-semibold">Valor</th>
-                    <th className="px-4 py-3.5 font-semibold">Vega aprovou</th>
+                    <th className="px-4 py-3.5 font-semibold">Pagamento aprovado</th>
                     <th className="px-4 py-3.5 font-semibold">
-                      TrackUp recebeu aprovação
+                      Webhook recebido
                     </th>
                     <th className="px-4 py-3.5 font-semibold">Atraso</th>
                     <th className="px-4 py-3.5 font-semibold">UTM / criativo</th>
@@ -1646,6 +1646,7 @@ function Index() {
                         <div className="font-mono text-xs font-bold text-slate-800">
                           {row.sale_code ?? row.transaction_token}
                         </div>
+                        <span className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{row.source_platform==="appmax"?"Appmax":"Vega"}</span>
                         <div className="mt-1 max-w-[170px] truncate text-[11px] text-slate-400">
                           {row.product_name ??
                             row.product_id ??
