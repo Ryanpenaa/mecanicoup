@@ -1299,7 +1299,7 @@ function Index() {
           {searchSales&&<button type="button" className="rounded-lg border px-3 py-2 text-xs font-bold" onClick={()=>setSearchSales("")}>Limpar busca</button>}
         </div>}
         {activeTab === "ads" && <MetaAdsPanel dashboardKey={dashboardKey} date={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
-         {activeTab === "analysis" && <AdAnalysisPanel dashboardKey={dashboardKey!} />}
+         {activeTab === "analysis" && <AdAnalysisPanel dashboardKey={dashboardKey!} dashboardDate={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
 
         {activeTab === "traffic" && (
           <>
