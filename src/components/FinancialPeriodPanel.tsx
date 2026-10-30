@@ -4,7 +4,7 @@ import {Download,RefreshCw,CalendarRange} from "lucide-react";
 const ROOT="https://xahydzcmpikbioeyvwst.supabase.co/functions/v1";
 const EXCLUDED=new Set(["1593509388682189","2220129438533853","1160571526431916"]);
 const EXCLUDE_PARAM=[...EXCLUDED].join(",");
-const STORAGE_PREFIX="trackup_finance_period_v1_";
+const STORAGE_PREFIX="trackup_finance_period_v2_";
 const money=(v:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
 const numeric=(v:number)=>new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(v);
 const dollarRate=(day:string)=>day==="2026-10-27"||day==="2026-10-28"?5.82:5.5;
