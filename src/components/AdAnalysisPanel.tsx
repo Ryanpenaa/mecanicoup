@@ -58,7 +58,7 @@ const snapshotStats=(snapshot:Snapshot)=>{
    checkouts:metrics.reduce((sum,m)=>sum+m.checkouts,0),
  };
 };
-export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
+export function AdAnalysisPanel({dashboardKey,dashboardDate,approvedCount,approvedRevenue}:{dashboardKey:string;dashboardDate:string;approvedCount:number;approvedRevenue:number}){
  const [data,setData]=useState<Report|null>(null),[history,setHistory]=useState<Snapshot[]>([]);
  const [loading,setLoading]=useState(true),[refreshing,setRefreshing]=useState(false),[error,setError]=useState("");
  const [search,setSearch]=useState(""),[period,setPeriod]=useState(3),[detail,setDetail]=useState<string|null>(null),[tick,setTick]=useState(0);
@@ -89,13 +89,13 @@ export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
          if(!synced.ok||!outcome.ok)throw Error("Não foi possível atualizar a Meta: "+(outcome.errors?.[0]?.error||outcome.error||"erro"));
        }
        const result=await query(slot?"capture":"overview",slot||undefined);
-       if(mounted){setData(result);setError("");try{sessionStorage.setItem("trackup_ad_review_v1_"+result.date,JSON.stringify({key:dashboardKey,savedAt:Date.now(),report:result}))}catch{}if(slot)void loadHistory();}
+       if(mounted){setData(result);setError("");try{sessionStorage.setItem("trackup_ad_review_v2_"+result.date,JSON.stringify({key:dashboardKey,savedAt:Date.now(),report:result}))}catch{}if(slot)void loadHistory();}
      }catch(e){if(mounted)setError(e instanceof Error?e.message:"Falha na análise");}
      finally{if(mounted){setLoading(false);setRefreshing(false)}}
    };
    // Reabre a última leitura local instantaneamente e revalida em segundo plano.
    try{
-     const raw=sessionStorage.getItem("trackup_ad_review_v1_"+localParts().date);
+     const raw=sessionStorage.getItem("trackup_ad_review_v2_"+localParts().date);
      if(raw){
        const saved=JSON.parse(raw);
        if(saved.key===dashboardKey&&saved.report?.ok&&Date.now()-Number(saved.savedAt||0)<6*3600000){
@@ -134,6 +134,10 @@ export function AdAnalysisPanel({dashboardKey}:{dashboardKey:string}){
      <button type="button" disabled={loading||refreshing} onClick={()=>setTick(n=>n+1)} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">
        <RefreshCw className={"h-4 w-4 "+(refreshing?"animate-spin":"")}/>Registrar leitura agora
      </button>
+   </div>
+   <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+     <span className="font-extrabold text-slate-900">Vendas reais conciliadas em {dashboardDate.split("-").reverse().join("/")}: {approvedCount} · {money(approvedRevenue)}.</span>
+     <span className="ml-1">Os números por anúncio mostram somente vendas atribuídas com segurança. Pedidos sem UTM seguem no total geral, mas não são atribuídos arbitrariamente a um criativo.</span>
    </div>
    <div className="grid gap-3 md:grid-cols-3">
      {WINDOWS.map(w=>{
