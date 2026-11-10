@@ -1094,6 +1094,7 @@ function Index() {
               <p className="text-xs text-slate-400">
                 Vega/AppMax → Supabase → Meta CAPI
               </p>
+              <span className="trackup-version-label" title="Identificador para verificar se a versão do GitHub chegou ao site">Interface renovada · 10/11</span>
             </div>
           </div>
 <div className="hidden min-w-[220px] px-3 sm:block"><div className="flex justify-between gap-3 text-xs font-bold"><span>Meta da oferta: R$ 100 mil</span><span>{totalPercent===null?"—":totalPercent.toLocaleString("pt-BR",{maximumFractionDigits:2})+"%"}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-emerald-400" style={{width:Math.min(100,Math.max(0,totalPercent??0))+"%"}}/></div><p className="mt-1 text-[10px] text-slate-400">{totalGrossCents===null?"Aguardando total histórico":formatMoney(totalGrossCents/100)+" acumulados (todas as ofertas registradas)"}</p></div>
