@@ -1139,7 +1139,7 @@ function Index() {
         {currentClose?.partial&&<p className="mt-2 text-xs text-amber-300">Meta parcial · sem resultado confiável</p>}
       </div>
 
-      <div className="trackup-workspace mx-auto flex max-w-[1920px] flex-col md:flex-row"><TrackUpSidebar active={activeTab} onChange={setActiveTab}/><main className="trackup-main min-w-0 flex-1 space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
+      <div className="trackup-workspace mx-auto flex max-w-[1920px] flex-col md:flex-row"><TrackUpSidebar active={activeTab} onChange={setActiveTab} alertCount={approved.filter(r=>Boolean(r.meta_purchase_error)||!r.tracking_matched).length}/><main className="trackup-main min-w-0 flex-1 space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
         <div className="trackup-integration-notice rounded-2xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex gap-3">
             <Eye className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
@@ -1228,7 +1228,7 @@ function Index() {
           <div><span>Receita confirmada · {topScope.toLowerCase()}</span><strong>{topRevenue===null?"—":formatMoney(topRevenue)}</strong><small>Pagamentos aprovados no financeiro</small></div>
           <div><span>Investimento em anúncios</span><strong>{topSpend===null?"—":formatMoney(topSpend)}</strong><small>Contas incluídas no fechamento</small></div>
           <div><span>Resultado após anúncios</span><strong className={topBalance===null?"":topBalance>=0?"is-positive":"is-negative"}>{topBalance===null?"—":formatMoney(topBalance)}</strong><small>Antes de taxas, impostos e outros custos</small></div>
-          <div><span>Retorno sobre anúncios</span><strong>{topRevenue!==null&&topSpend!==null&&topSpend>0&&!currentClose?.partial?(topRevenue/topSpend).toLocaleString("pt-BR",{maximumFractionDigits:2})+"x":"—"}</strong><small>Receita ÷ gasto; fechamento válido</small></div>
+          <div><span>Retorno sobre anúncios</span><strong>{topRevenue!==null&&topSpend!==null&&topSpend>0&&(financeView==="range"?periodFinance!==null:!currentClose?.partial)?(topRevenue/topSpend).toLocaleString("pt-BR",{maximumFractionDigits:2})+"x":"—"}</strong><small>Receita ÷ gasto; fechamento válido</small></div>
         </div>
         <div role="group" aria-label="Visualização do fechamento financeiro" className="flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
           <button type="button" aria-pressed={financeView==="day"} onClick={()=>setFinanceView("day")} className={`rounded-lg px-4 py-2 text-sm font-bold ${financeView==="day"?"bg-slate-950 text-white":"text-slate-600 hover:bg-slate-50"}`}>Diário</button>
