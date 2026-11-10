@@ -1,3 +1,4 @@
+import { TrackUpSidebar } from "../components/TrackUpSidebar";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TrackUpChat } from "../components/TrackUpChat";
@@ -1136,8 +1137,8 @@ function Index() {
         {currentClose?.partial&&<p className="mt-2 text-xs text-amber-300">Meta parcial · sem resultado confiável</p>}
       </div>
 
-      <div className="mx-auto flex max-w-[1920px] flex-col md:flex-row"><aside className="w-full shrink-0 border-b border-slate-200 bg-white p-3 md:w-56 md:border-r md:p-4"><nav aria-label="Menu principal" className="flex gap-2 overflow-x-auto md:flex-col">{([{id:"summary",name:"Resumo",icon:Gauge},{id:"ads",name:"Campanhas",icon:Activity},{id:"analysis",name:"Análise de Anúncios",icon:Gauge},{id:"traffic",name:"Qualidade do tráfego",icon:Eye},{id:"transactions",name:"Vendas / Webhooks",icon:ShoppingCart}] as const).map(item=><button key={item.id} type="button" onClick={()=>setActiveTab(item.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-3 text-left text-sm font-bold md:w-full ${activeTab===item.id?"bg-blue-600 text-white":"text-slate-600 hover:bg-slate-100"}`}><item.icon className="h-4 w-4"/>{item.name}</button>)}</nav><p className="mt-8 hidden text-xs text-slate-400 md:block">TrackUp · PT-BR</p></aside><main className="trackup-main min-w-0 flex-1 space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+      <div className="trackup-workspace mx-auto flex max-w-[1920px] flex-col md:flex-row"><TrackUpSidebar active={activeTab} onChange={setActiveTab}/><main className="trackup-main min-w-0 flex-1 space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
+        <div className="trackup-integration-notice rounded-2xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex gap-3">
             <Eye className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
             <div>
