@@ -12,7 +12,7 @@ const items = [
   { id: "operations", label: "Monitoramento", subtitle: "Integrações e alertas", icon: BellRing },
 ] as const;
 
-export function TrackUpSidebar({ active, onChange }: { active: TrackUpView; onChange: (view: TrackUpView) => void }) {
+export function TrackUpSidebar({ active, onChange, alertCount = 0 }: { active: TrackUpView; onChange: (view: TrackUpView) => void; alertCount?: number }) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const select = (view: TrackUpView) => { onChange(view); setOpen(false); };
@@ -36,6 +36,7 @@ export function TrackUpSidebar({ active, onChange }: { active: TrackUpView; onCh
           {items.map(item => <button key={item.id} type="button" title={item.label} aria-current={active === item.id ? "page" : undefined} className={`trackup-sidebar-link ${active === item.id ? "is-active" : ""}`} onClick={() => select(item.id)}>
             <item.icon size={19} />
             {!collapsed && <span><strong>{item.label}</strong><small>{item.subtitle}</small></span>}
+            {item.id === "operations" && alertCount > 0 && <em className="trackup-alert-count" aria-label={`${alertCount} ocorrências para revisar`}>{alertCount > 99 ? "99+" : alertCount}</em>}
           </button>)}
         </nav>
         <div className="trackup-sidebar-footer">
