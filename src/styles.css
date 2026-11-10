@@ -293,3 +293,21 @@
 @media (prefers-reduced-motion:reduce) {
  .trackup-sidebar,.trackup-sidebar-link { transition:none; }
 }
+
+/* Clearly identifiable release styling: 2026-11-10 */
+.trackup-version-label { display:inline-flex;align-items:center;gap:6px;margin-top:7px;padding:4px 9px;border-radius:99px;background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:800;letter-spacing:.02em; }
+.trackup-header { background:#ffffff!important;border-bottom:1px solid #e5eaf2!important;box-shadow:0 4px 25px rgba(15,23,42,.04)!important;color:#15263b!important; }
+.trackup-header h1 { color:#14233b; }
+.trackup-header h1 .text-emerald-400 { color:#2563eb; }
+.trackup-header .text-emerald-300 { color:#1d4ed8; }
+.trackup-header .text-slate-400 { color:#66778c; }
+.trackup-header .text-slate-300 { color:#475569; }
+.trackup-header .text-white { color:#14233b; }
+.trackup-header .bg-emerald-400 { background:#2563eb;color:#fff; }
+.trackup-header .bg-white\/5 { background:#f8faff; }
+.trackup-header .border-white\/10 { border-color:#e5eaf2; }
+.trackup-header .bg-white\/20 { background:#e2e8f0; }
+.trackup-header button { background:#f5f8fe;color:#314459;border-color:#e4eaf4; }
+.trackup-header button:hover { background:#eaf0ff;transform:none; }
+.trackup-shell { background:#f6f8fc!important; }
+.trackup-main > section.rounded-2xl, .trackup-main > div > section.rounded-2xl { border-radius:16px; }
