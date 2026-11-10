@@ -363,3 +363,5 @@
  .trackup-page-heading h2 { font-size:22px; }
  .trackup-search { max-width:none; }
 }
+
+.trackup-alert-count { font-style:normal;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:850;padding:0 4px; }
