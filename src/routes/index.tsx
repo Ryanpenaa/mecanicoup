@@ -1,3 +1,4 @@
+import { OperationsPanel } from "../components/OperationsPanel";
 import { TrackUpSidebar } from "../components/TrackUpSidebar";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -693,7 +694,7 @@ function Index() {
   const [dailyCloseRefresh,setDailyCloseRefresh]=useState(0);
   const [financeView,setFinanceView]=useState<"day"|"range">("day");
   const [periodFinance,setPeriodFinance]=useState<PeriodFinancialTotal|null>(null);
-  const [activeTab, setActiveTab] = useState<"summary" | "transactions" | "traffic" | "ads" | "analysis">("summary");
+  const [activeTab, setActiveTab] = useState<"summary" | "transactions" | "traffic" | "ads" | "analysis" | "operations">("summary");
   const [visibleCards,setVisibleCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_summary_visible_v3")||"null");return Array.isArray(v)?v:["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}catch{return ["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}});
   const [editCards,setEditCards]=useState(false);
   const [selectedOffer,setSelectedOffer]=useState("all");
@@ -1219,6 +1220,16 @@ function Index() {
         </section>
 
         {activeTab==="summary"&&<div className="space-y-4">
+        <div className="trackup-page-heading">
+          <div><p className="trackup-overline">VISÃO GERAL DA OPERAÇÃO</p><h2>Dashboard de desempenho</h2><p>Acompanhe o financeiro, a origem das vendas e a performance dos anúncios em um só lugar.</p></div>
+          <button type="button" className="trackup-action-secondary" onClick={()=>setActiveTab("operations")}><AlertTriangle className="h-4 w-4"/> Monitorar envios {approved.filter(r=>Boolean(r.meta_purchase_error)||!r.tracking_matched).length>0?"("+approved.filter(r=>Boolean(r.meta_purchase_error)||!r.tracking_matched).length+")":""}</button>
+        </div>
+        <div className="trackup-finance-glance" aria-label="Indicadores financeiros do fechamento">
+          <div><span>Receita confirmada · {topScope.toLowerCase()}</span><strong>{topRevenue===null?"—":formatMoney(topRevenue)}</strong><small>Pagamentos aprovados no financeiro</small></div>
+          <div><span>Investimento em anúncios</span><strong>{topSpend===null?"—":formatMoney(topSpend)}</strong><small>Contas incluídas no fechamento</small></div>
+          <div><span>Resultado após anúncios</span><strong className={topBalance===null?"":topBalance>=0?"is-positive":"is-negative"}>{topBalance===null?"—":formatMoney(topBalance)}</strong><small>Antes de taxas, impostos e outros custos</small></div>
+          <div><span>Retorno sobre anúncios</span><strong>{topRevenue!==null&&topSpend!==null&&topSpend>0&&!currentClose?.partial?(topRevenue/topSpend).toLocaleString("pt-BR",{maximumFractionDigits:2})+"x":"—"}</strong><small>Receita ÷ gasto; fechamento válido</small></div>
+        </div>
         <div role="group" aria-label="Visualização do fechamento financeiro" className="flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
           <button type="button" aria-pressed={financeView==="day"} onClick={()=>setFinanceView("day")} className={`rounded-lg px-4 py-2 text-sm font-bold ${financeView==="day"?"bg-slate-950 text-white":"text-slate-600 hover:bg-slate-50"}`}>Diário</button>
           <button type="button" aria-pressed={financeView==="range"} onClick={()=>{setPeriodFinance(null);setFinanceView("range")}} className={`rounded-lg px-4 py-2 text-sm font-bold ${financeView==="range"?"bg-slate-950 text-white":"text-slate-600 hover:bg-slate-50"}`}>Por período</button>
@@ -1300,6 +1311,7 @@ function Index() {
           <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Buscar vendas por código, produto, campanha ou criativo<input type="search" value={searchSales} onChange={e=>setSearchSales(e.target.value)} placeholder="Pesquisar vendas..." className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /></label>
           {searchSales&&<button type="button" className="rounded-lg border px-3 py-2 text-xs font-bold" onClick={()=>setSearchSales("")}>Limpar busca</button>}
         </div>}
+        {activeTab === "operations" && <OperationsPanel rows={dayRows} date={selectedDate} metaCapiEnabled={metaCapiEnabled} generatedAt={generatedAt} onOpenSales={()=>setActiveTab("transactions")} onRefresh={()=>{if(dashboardKey)void fetchDashboard(dashboardKey)}} refreshing={refreshing} />}
         {activeTab === "ads" && <MetaAdsPanel dashboardKey={dashboardKey} date={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
          {activeTab === "analysis" && <AdAnalysisPanel dashboardKey={dashboardKey!} dashboardDate={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
 
