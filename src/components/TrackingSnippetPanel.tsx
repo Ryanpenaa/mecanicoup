@@ -3,7 +3,7 @@ import { Check, Clipboard, Code2, Eye, EyeOff, ExternalLink } from "lucide-react
 const ROOT="https://xahydzcmpikbioeyvwst.supabase.co/functions/v1";
 export function TrackingSnippetPanel({selectedPixelId}:{selectedPixelId?:string}){
  const [pixelId,setPixelId]=useState("");
- useEffect(()=>{if(selectedPixelId&&/^\\d{10,25}$/.test(selectedPixelId))setPixelId(selectedPixelId)},[selectedPixelId]);
+ useEffect(()=>{if(selectedPixelId&&/^\d{10,25}$/.test(selectedPixelId))setPixelId(selectedPixelId)},[selectedPixelId]);
  const [preview,setPreview]=useState(false);
  const [copied,setCopied]=useState(false);
  const [trackCheckout,setTrackCheckout]=useState(true);
