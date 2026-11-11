@@ -13,7 +13,7 @@ async function request(key:string,action:string,init?:RequestInit,params?:Record
  const data=await r.json();if(!r.ok||!data.ok)throw Error(data.detail||data.error||"Falha na conexão");
  return data;
 }
-export function MetaConnectionPanel({dashboardKey}:{dashboardKey:string}){
+export function MetaConnectionPanel({dashboardKey,onPixelSelected}:{dashboardKey:string;onPixelSelected?:(pixelId:string)=>void}){
  const [loading,setLoading]=useState(true);
  const [busy,setBusy]=useState(false);
  const [configured,setConfigured]=useState(false);
@@ -41,7 +41,7 @@ export function MetaConnectionPanel({dashboardKey}:{dashboardKey:string}){
   window.addEventListener("message",onMessage);
   return()=>window.removeEventListener("message",onMessage);
  },[fetchStatus]);
- useEffect(()=>{const current=connections.find(c=>c.id===selected);if(current){setAccountIds(current.selected_ad_accounts||[]);setPixel(current.selected_pixel_id||"");}setAssets(null);},[selected,connections]);
+ useEffect(()=>{const current=connections.find(c=>c.id===selected);if(current){setAccountIds(current.selected_ad_accounts||[]);setPixel(current.selected_pixel_id||"");if(current.selected_pixel_id)onPixelSelected?.(current.selected_pixel_id);}setAssets(null);},[selected,connections]);
  const connect=async()=>{
   setBusy(true);setMessage("");
   try{
@@ -52,7 +52,7 @@ export function MetaConnectionPanel({dashboardKey}:{dashboardKey:string}){
   finally{setBusy(false);}
  };
  const loadAssets=async()=>{if(!selected)return;setBusy(true);setMessage("");try{const data=await request(dashboardKey,"assets",undefined,{connection_id:selected});setAssets(data);}catch(e){setMessage(e instanceof Error?e.message:"Não foi possível consultar ativos");}finally{setBusy(false);}};
- const save=async()=>{setBusy(true);setMessage("");try{await request(dashboardKey,"select",{method:"POST",body:JSON.stringify({account_ids:accountIds,pixel_id:pixel||null})},{connection_id:selected});setMessage("Contas e pixel selecionados. O vínculo não altera o pixel nas páginas de checkout.");await fetchStatus();}catch(e){setMessage(e instanceof Error?e.message:"Erro ao salvar");}finally{setBusy(false);}};
+ const save=async()=>{setBusy(true);setMessage("");try{await request(dashboardKey,"select",{method:"POST",body:JSON.stringify({account_ids:accountIds,pixel_id:pixel||null})},{connection_id:selected});setMessage("Contas e pixel selecionados. O vínculo não altera o pixel nas páginas de checkout.");if(pixel)onPixelSelected?.(pixel);await fetchStatus();}catch(e){setMessage(e instanceof Error?e.message:"Erro ao salvar");}finally{setBusy(false);}};
  const disconnect=async()=>{if(!selected||!window.confirm("Desconectar esta conta Meta do TrackUp?"))return;setBusy(true);try{await request(dashboardKey,"disconnect",{method:"POST"},{connection_id:selected});setSelected("");setAssets(null);await fetchStatus();}catch(e){setMessage(e instanceof Error?e.message:"Erro ao desconectar");}finally{setBusy(false);}};
  const current=connections.find(c=>c.id===selected);
  const possiblePixels=assets?.pixels.flatMap(x=>x.pixels.map(p=>({...p,account:x.account}))).filter((p,i,a)=>a.findIndex(x=>x.id===p.id)===i)||[];
