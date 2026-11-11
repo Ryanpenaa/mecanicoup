@@ -1,3 +1,4 @@
+import { MetaPixelVaultPanel } from "./MetaPixelVaultPanel";
 import { useCallback, useEffect, useState } from "react";
 import { Check, ChevronDown, ExternalLink, Link2, Loader2, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
 
@@ -69,6 +70,7 @@ export function MetaConnectionPanel({dashboardKey,onPixelSelected}:{dashboardKey
     <label className="mt-4 block text-xs font-semibold text-slate-600">Pixel de destino<select value={pixel} onChange={e=>setPixel(e.target.value)} className="mt-2 block w-full max-w-lg rounded-lg border border-slate-200 bg-white p-2 text-sm"><option value="">Selecionar depois</option>{possiblePixels.filter(p=>accountIds.includes(p.account.replace(/^act_/,""))).map(p=><option key={p.id} value={p.id}>{p.name} ({p.id})</option>)}</select></label>
     <button type="button" disabled={busy} onClick={save} className="trackup-action mt-4"><Check size={16}/> Salvar seleção</button>
    </div>}
+   {current?.selected_pixel_id&&<MetaPixelVaultPanel dashboardKey={dashboardKey} connectionId={current.id} pixelId={current.selected_pixel_id}/>}
    {message&&<p role="status" className="mt-4 rounded-lg bg-slate-100 p-3 text-xs text-slate-700">{message}</p>}
   </section>
   <section className="trackup-ops-surface">
