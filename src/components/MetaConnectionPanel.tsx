@@ -71,6 +71,15 @@ export function MetaConnectionPanel({dashboardKey}:{dashboardKey:string}){
    </div>}
    {message&&<p role="status" className="mt-4 rounded-lg bg-slate-100 p-3 text-xs text-slate-700">{message}</p>}
   </section>
+  <section className="trackup-ops-surface">
+    <h3 className="font-bold">Plataformas de checkout</h3>
+    <p className="mt-1 text-xs text-slate-500">Separação por provedor para evitar eventos duplicados e encaminhar as vendas ao pixel correto.</p>
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="trackup-connection"><Check className="mt-1" size={18}/><div><strong>Vega Checkout</strong><small>Receptor de webhooks já existente no TrackUp. A configuração atual não foi alterada.</small><code className="mt-2 block break-all text-[10px]">https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/vega-webhook</code></div></div>
+      <div className="trackup-connection"><Link2 className="mt-1" size={18}/><div><strong>Cakto</strong><small>Receptor com assinatura verificada e deduplicação, aguardando o segredo do webhook e ativação do processamento.</small><code className="mt-2 block break-all text-[10px]">https://xahydzcmpikbioeyvwst.supabase.co/functions/v1/trackup-cakto-webhook</code><a className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-blue-700" href="https://ajuda.cakto.com.br/pt-br/articles/1-como-funcionam-os-webhooks-na-cakto-guia-completo" target="_blank" rel="noreferrer">Configurar webhook na Cakto <ExternalLink size={12}/></a></div></div>
+    </div>
+    <p className="mt-3 text-xs text-amber-700">A conexão da Meta não concede acesso automático ao checkout. Para configurar webhooks por API são necessárias autorizações específicas de cada plataforma. A ativação do Purchase depende de mapeamento de produtos e deduplicação.</p>
+  </section>
   <section className="trackup-ops-surface"><h3 className="font-bold">Próximo passo: ativar o rastreamento</h3><p className="mt-2 text-xs leading-5 text-slate-600">A autorização da Meta permite descobrir contas e pixels, mas não instala automaticamente o pixel em sites externos. O TrackUp precisa de integração específica com cada checkout e autorização para enviar eventos ao pixel escolhido. O monitoramento atual de Vega/Appmax continua independente dessa nova conexão.</p></section>
  </div>;
 }
