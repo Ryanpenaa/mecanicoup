@@ -26,7 +26,7 @@ const readCache=(start:string,end:string):Report|null=>{
 };
 const saveCache=(report:Report)=>{if(report.partial)return;try{localStorage.setItem(STORAGE_PREFIX+report.start+"_"+report.end,JSON.stringify({...report,cached:false}))}catch{}};
 export function clearFinancialPeriodCache(){try{for(let i=localStorage.length-1;i>=0;i--){const key=localStorage.key(i);if(key?.startsWith(STORAGE_PREFIX))localStorage.removeItem(key)}}catch{}}
-export function FinancialPeriodPanel({dashboardKey,onResult}:{dashboardKey:string;onResult:(v:PeriodFinancialTotal|null)=>void}){
+export function FinancialPeriodPanel({dashboardKey,onResult,externalRange}:{dashboardKey:string;onResult:(v:PeriodFinancialTotal|null)=>void;externalRange?:{start:string;end:string}|null}){
  const today=localDay();
  const [from,setFrom]=useState(()=>shiftDay(today,-6));
  const [to,setTo]=useState(today);
@@ -36,6 +36,15 @@ export function FinancialPeriodPanel({dashboardKey,onResult}:{dashboardKey:strin
  const [error,setError]=useState("");
  const [refresh,setRefresh]=useState(0);
  const duration=useMemo(()=>Math.round((Date.parse(applied.end+"T12:00:00Z")-Date.parse(applied.start+"T12:00:00Z"))/86400000)+1,[applied]);
+ useEffect(()=>{
+   if(!externalRange?.start||!externalRange?.end)return;
+   const start=externalRange.start,end=externalRange.end;
+   if(start>end||end>localDay())return;
+   const days=Math.round((Date.parse(end+"T12:00:00Z")-Date.parse(start+"T12:00:00Z"))/86400000)+1;
+   if(days<1||days>90)return;
+   setFrom(start);setTo(end);
+   setApplied(old=>old.start===start&&old.end===end?old:{start,end});
+ },[externalRange?.start,externalRange?.end]);
  const queryValid=(start:string,end:string)=>{
    if(!start||!end||start>end||end>localDay())return "Escolha duas datas válidas, sem ultrapassar hoje.";
    const days=Math.round((Date.parse(end+"T12:00:00Z")-Date.parse(start+"T12:00:00Z"))/86400000)+1;
