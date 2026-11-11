@@ -10,7 +10,7 @@ type Row={id:string;name:string;status:string;effective_status:string;account_id
 const columns=[{id:"status",name:"Status"},{id:"spend",name:"Gasto"},{id:"impressions",name:"Impressões"},{id:"clicks",name:"Cliques"},{id:"cpc",name:"CPC"},{id:"ctr",name:"CTR"},{id:"checkouts",name:"Checkouts"},{id:"purchases",name:"Compras"},{id:"cpa",name:"CPA"},{id:"roas",name:"ROAS"}] as const;
 const money=(n:number,c:string)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:c||"BRL"}).format(n);
 const number=(n:number)=>new Intl.NumberFormat("pt-BR",{maximumFractionDigits:2}).format(n);
-const getAction=(a:Insights["actions"],names:string[])=>names.reduce((v,k)=>v+(Number(a?.find(x=>x.action_type===k)?.value)||0),0);
+const getAction=(a:Insights["actions"],names:string[])=>{for(const key of names){const found=a?.find(x=>x.action_type===key);if(found)return Number(found.value)||0;}return 0;};
 const readColumns=()=>{try{const saved=JSON.parse(localStorage.getItem("trackup_manage_columns_v1")||"null");if(Array.isArray(saved))return saved.filter((x:unknown):x is string=>typeof x==="string"&&columns.some(c=>c.id===x));}catch{}return ["status","spend","impressions","clicks","cpc","ctr","checkouts","purchases","roas"]};
 const request=async(key:string,action:string,query:Record<string,string>={},options?:RequestInit)=>{
  const params=new URLSearchParams({...query,action});const response=await fetch(ENDPOINT+"?"+params,{...options,headers:{"x-dashboard-key":key,...(options?.body?{"content-type":"application/json"}:{}),...options?.headers}});
@@ -44,7 +44,7 @@ export function CampaignControlPanel({dashboardKey,start,end,onConnect}:{dashboa
   if(!connection||!account)return;setBusy(true);setError("");setNotice("");
   try{
    const d=await request(dashboardKey,"campaigns",{connection_id:connection,account_id:account,level,start,end});
-   setRows(d.items||[]);setSelected([]);
+   setRows(d.items||[]);setSelected([]);if(d.currency)setCurrency(d.currency);
    setNotice((d.items||[]).length+" itens encontrados. Status atualizado diretamente pela Meta.");
   }catch(e){setRows([]);setError(e instanceof Error?e.message:"Falha na consulta");}
   finally{setBusy(false);}
