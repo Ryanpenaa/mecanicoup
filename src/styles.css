@@ -410,3 +410,15 @@
   table {font-size:9px!important;}
   a {color:#111827!important;text-decoration:none!important;}
 }
+
+/* User-controlled privacy mask for a shared screen. Values remain available to export/report. */
+.trackup-privacy-on .trackup-header .tabular-nums,
+.trackup-privacy-on .trackup-finance-glance strong,
+.trackup-privacy-on [aria-label="Resumo das vendas e rastreamento"] .text-2xl,
+.trackup-privacy-on .trackup-main .tabular-nums,
+.trackup-privacy-on .trackup-main [aria-label="Fechamento financeiro Vega Appmax"] .text-2xl,
+.trackup-privacy-on .trackup-main [aria-label="Fechamento financeiro por período"] .text-2xl { filter:blur(7px)!important;user-select:none; }
+@media print {
+ .trackup-privacy-on .trackup-finance-glance strong,
+ .trackup-privacy-on .trackup-main .tabular-nums {filter:none!important;}
+}
