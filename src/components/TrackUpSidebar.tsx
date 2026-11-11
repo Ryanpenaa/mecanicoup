@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Activity, BarChart3, ChevronLeft, ChevronRight, Eye, Gauge, Menu, ShoppingCart, X, ShieldCheck, BellRing } from "lucide-react";
+import { Activity, BarChart3, ChevronLeft, ChevronRight, Eye, Gauge, Menu, ShoppingCart, X, ShieldCheck, BellRing, PlugZap } from "lucide-react";
 
-export type TrackUpView = "summary" | "transactions" | "traffic" | "ads" | "analysis" | "operations";
+export type TrackUpView = "summary" | "transactions" | "traffic" | "ads" | "analysis" | "operations" | "connections";
 
 const items = [
   { id: "summary", label: "Painel", subtitle: "Indicadores e funil", icon: Gauge },
@@ -10,6 +10,7 @@ const items = [
   { id: "transactions", label: "Vendas", subtitle: "Pedidos e webhooks", icon: ShoppingCart },
   { id: "traffic", label: "Visitas", subtitle: "Qualidade do tráfego", icon: Eye },
   { id: "operations", label: "Monitoramento", subtitle: "Integrações e alertas", icon: BellRing },
+  { id: "connections", label: "Integrações", subtitle: "Meta, pixels e checkouts", icon: PlugZap },
 ] as const;
 
 export function TrackUpSidebar({ active, onChange, alertCount = 0 }: { active: TrackUpView; onChange: (view: TrackUpView) => void; alertCount?: number }) {
