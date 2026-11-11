@@ -1,3 +1,5 @@
+import { CampaignControlPanel } from "../components/CampaignControlPanel";
+import { TrackingSnippetPanel } from "../components/TrackingSnippetPanel";
 import { MetaConnectionPanel } from "../components/MetaConnectionPanel";
 import { OperationsPanel } from "../components/OperationsPanel";
 import { TrackUpSidebar } from "../components/TrackUpSidebar";
@@ -1350,9 +1352,12 @@ function Index() {
           <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Buscar vendas por código, produto, campanha ou criativo<input type="search" value={searchSales} onChange={e=>setSearchSales(e.target.value)} placeholder="Pesquisar vendas..." className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /></label>
           {searchSales&&<button type="button" className="rounded-lg border px-3 py-2 text-xs font-bold" onClick={()=>setSearchSales("")}>Limpar busca</button>}
         </div>}
-        {activeTab === "connections" && <MetaConnectionPanel dashboardKey={dashboardKey!} />}
+        {activeTab === "connections" && <div className="space-y-5"><MetaConnectionPanel dashboardKey={dashboardKey!}/><TrackingSnippetPanel/></div>}
         {activeTab === "operations" && <OperationsPanel rows={dayRows} date={selectedDate} metaCapiEnabled={metaCapiEnabled} generatedAt={generatedAt} onOpenSales={()=>setActiveTab("transactions")} onRefresh={()=>{if(dashboardKey)void fetchDashboard(dashboardKey)}} refreshing={refreshing} />}
-        {activeTab === "ads" && <MetaAdsPanel dashboardKey={dashboardKey} date={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
+        {activeTab === "ads" && <div className="space-y-5">
+          <CampaignControlPanel dashboardKey={dashboardKey!} start={financeView==="range"&&dashboardRange?dashboardRange.start:selectedDate} end={financeView==="range"&&dashboardRange?dashboardRange.end:selectedDate} onConnect={()=>setActiveTab("connections")}/>
+          <details className="rounded-2xl border border-slate-200 bg-white p-4"><summary className="cursor-pointer text-sm font-bold text-slate-700">Relatórios avançados e conciliação do TrackUp (legado)</summary><div className="mt-4"><MetaAdsPanel dashboardKey={dashboardKey} date={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} /></div></details>
+          </div>}
          {activeTab === "analysis" && <AdAnalysisPanel dashboardKey={dashboardKey!} dashboardDate={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
 
         {activeTab === "traffic" && (
