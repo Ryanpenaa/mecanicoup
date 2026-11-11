@@ -365,3 +365,48 @@
 }
 
 .trackup-alert-count { font-style:normal;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:850;padding:0 4px; }
+
+/* Single dashboard controls and authorized campaign management */
+.trackup-dashboard-toolbar {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid #e2e8f0;border-radius:15px;padding:14px 16px;box-shadow:0 4px 16px rgba(15,23,42,.035);}
+.trackup-dashboard-toolbar-title {display:flex;flex-direction:column;gap:3px;}
+.trackup-dashboard-toolbar-title strong {font-size:15px;color:#152842;font-weight:850;}
+.trackup-dashboard-toolbar-title small {font-size:11px;color:#94a3b8;}
+.trackup-toolbar-presets,.trackup-toolbar-actions {display:flex;align-items:center;flex-wrap:wrap;gap:5px;}
+.trackup-toolbar-presets button,.trackup-toolbar-actions button {display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #e2e8f0;border-radius:9px;min-height:34px;padding:7px 10px;color:#475569;font-size:11px;font-weight:750;background:#fff;}
+.trackup-toolbar-presets button[aria-pressed="true"],.trackup-toolbar-presets button:hover {background:#2563eb;color:white;border-color:#2563eb;}
+.trackup-toolbar-actions button:hover {background:#eff6ff;color:#1d4ed8;}
+.trackup-custom-range {display:flex;flex-wrap:wrap;align-items:end;gap:12px;padding:14px;border:1px solid #cfe0ff;border-radius:12px;background:#f8fbff;}
+.trackup-custom-range label {display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:800;color:#334155;}
+.trackup-custom-range input {padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:white;font-size:12px;color:#334155;}
+.trackup-custom-range button {padding:9px 12px;background:#2563eb;color:white;font-weight:800;font-size:12px;border-radius:8px;}
+.trackup-custom-range button:disabled {opacity:.4;}
+.trackup-custom-range span {font-size:11px;color:#64748b;}
+.trackup-layout-picker {display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#f8fbff;border:1px solid #dbe7fa;padding:14px;border-radius:12px;}
+.trackup-layout-picker strong {color:#334155;font-size:12px;margin-right:4px;}
+.trackup-layout-picker label {display:flex;gap:6px;align-items:center;font-size:12px;font-weight:650;color:#475569;}
+.trackup-management-select {display:block;width:100%;padding:10px 12px;margin-top:6px;background:white;border:1px solid #cbd5e1;border-radius:10px;font-size:12px;color:#334155;}
+.trackup-management-levels {display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:4px;background:#f1f5f9;border-radius:11px;width:max-content;max-width:100%;}
+.trackup-management-levels button {padding:9px 16px;border-radius:8px;color:#64748b;font-size:12px;font-weight:800;}
+.trackup-management-levels button[aria-pressed="true"] {background:#2563eb;color:white;box-shadow:0 3px 9px rgba(37,99,235,.13);}
+.trackup-management-filters {display:flex;align-items:center;flex-wrap:wrap;gap:10px;}
+.trackup-batch-toolbar {display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;font-size:12px;font-weight:800;color:#1d4ed8;}
+.trackup-batch-toolbar button {padding:7px 10px;border:1px solid #93c5fd;border-radius:8px;background:#fff;color:#1d4ed8;font-size:12px;}
+.trackup-batch-toolbar button:disabled,.trackup-status-action:disabled {opacity:.4;cursor:not-allowed;}
+.trackup-status-action {display:inline-flex;gap:5px;align-items:center;padding:6px 8px;border-radius:8px;background:#f1f5f9;font-size:11px;font-weight:750;color:#334155;}
+@media(max-width:640px) {
+ .trackup-dashboard-toolbar {padding:12px;}
+ .trackup-toolbar-presets {width:100%;overflow-x:auto;flex-wrap:nowrap;padding-bottom:3px;}
+ .trackup-toolbar-presets button {white-space:nowrap;}
+ .trackup-toolbar-actions {width:100%;}
+}
+@media print {
+  @page {size:A4 landscape;margin:12mm;}
+  body,.trackup-shell {background:#fff!important;color:#111827!important;}
+  .trackup-header,.trackup-sidebar,.trackup-mobile-nav,.trackup-sidebar-backdrop,.trackup-dashboard-toolbar,.trackup-custom-range,.trackup-layout-picker,.trackup-toolbar-actions,.trackup-batch-toolbar,.trackup-main button,.trackup-operations button {display:none!important;}
+  .trackup-workspace,.trackup-main,.trackup-ops-surface,.trackup-main section {width:100%!important;max-width:none!important;overflow:visible!important;box-shadow:none!important;}
+  .trackup-main {padding:0!important;margin:0!important;}
+  .trackup-finance-glance {grid-template-columns:repeat(4,1fr)!important;}
+  .trackup-main section,.trackup-finance-glance>div,.trackup-ops-surface {break-inside:avoid;}
+  table {font-size:9px!important;}
+  a {color:#111827!important;text-decoration:none!important;}
+}
