@@ -1110,7 +1110,7 @@ function Index() {
   }
 
   return (
-    <div className="trackup-shell min-h-screen bg-slate-50 text-slate-950">
+    <div className={`trackup-shell min-h-screen bg-slate-50 text-slate-950 ${hideFinancial?"trackup-privacy-on":""}`}>
       <header className="trackup-header border-b border-slate-800 bg-slate-950 text-white">
         <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -1250,7 +1250,7 @@ function Index() {
         <div className="trackup-dashboard-toolbar" aria-label="Ferramentas do painel central">
           <div className="trackup-dashboard-toolbar-title"><strong>Dashboard principal</strong><small>Um único painel para suas ofertas e contas</small></div>
           <div className="trackup-toolbar-presets" role="group" aria-label="Selecionar período">
-            {([{id:"today",name:"Hoje"},{id:"yesterday",name:"Ontem"},{id:"7",name:"7 dias"},{id:"15",name:"15 dias"},{id:"30",name:"30 dias"}] as const).map(item=><button key={item.id} type="button" aria-pressed={item.id==="today"?financeView==="day"&&selectedDate===todayDateKey():item.id==="yesterday"?financeView==="day"&&selectedDate===shiftDateKey(todayDateKey(),-1):financeView==="range"&&dashboardRange?.start===shiftDateKey(todayDateKey(),-Number(item.id)+1)&&dashboardRange.end===todayDateKey()} onClick={()=>selectDashboardPreset(item.id)}>{item.name}</button>)}
+            {([{id:"today",name:"Hoje"},{id:"yesterday",name:"Ontem"},{id:"7",name:"7 dias"},{id:"15",name:"15 dias"},{id:"30",name:"30 dias"}] as const).map(item=><button key={item.id} type="button" aria-pressed={item.id==="today"?financeView==="day"&&selectedDate===todayDateKey():item.id==="yesterday"?financeView==="day"&&selectedDate===shiftDateKey(todayDateKey(),-1):financeView==="range"&&dashboardRange?.start===shiftDateKey(todayDateKey(),-Number(item.id)+1)&&dashboardRange?.end===todayDateKey()} onClick={()=>selectDashboardPreset(item.id)}>{item.name}</button>)}
             <button type="button" aria-expanded={customRangeOpen} onClick={()=>setCustomRangeOpen(v=>!v)}>Personalizado</button>
           </div>
           <div className="trackup-toolbar-actions">
