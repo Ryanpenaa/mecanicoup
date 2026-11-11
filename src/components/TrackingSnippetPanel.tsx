@@ -15,7 +15,7 @@ export function TrackingSnippetPanel(){
  var links=${trackCheckout?"true":"false"};
  var pixelEnabled=${trackPixel?"true":"false"};
  var qs=new URLSearchParams(location.search);
- function cookie(name){var m=document.cookie.match(new RegExp("(?:^|; )"+name.replace(/[.*+?^\\$\\{\\}()|[\\]\\\\]/g,"\\$&")+"=([^;]*)"));return m?decodeURIComponent(m[1]):"";}
+ function cookie(name){var parts=document.cookie.split(";");for(var i=0;i<parts.length;i++){var p=parts[i].trim();if(p.indexOf(name+"=")===0)return decodeURIComponent(p.slice(name.length+1));}return "";}
  function id(prefix){return prefix+"_"+Array.from(crypto.getRandomValues(new Uint8Array(12))).map(function(b){return b.toString(16).padStart(2,"0")}).join("");}
  var tid;try{tid=sessionStorage.getItem("trackup_id");if(!tid||!/^trk_[a-z0-9_]+$/i.test(tid)){tid=id("trk");sessionStorage.setItem("trackup_id",tid);}}catch(e){tid=id("trk");}
  var vid;try{vid=localStorage.getItem("trackup_visitor");if(!vid||!/^vis_[a-z0-9_]+$/i.test(vid)){vid=id("vis");localStorage.setItem("trackup_visitor",vid);}}catch(e){vid=id("vis");}
