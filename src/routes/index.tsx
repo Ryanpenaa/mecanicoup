@@ -1,3 +1,4 @@
+import { MetaConnectionPanel } from "../components/MetaConnectionPanel";
 import { OperationsPanel } from "../components/OperationsPanel";
 import { TrackUpSidebar } from "../components/TrackUpSidebar";
 import { createFileRoute } from "@tanstack/react-router";
@@ -694,7 +695,7 @@ function Index() {
   const [dailyCloseRefresh,setDailyCloseRefresh]=useState(0);
   const [financeView,setFinanceView]=useState<"day"|"range">("day");
   const [periodFinance,setPeriodFinance]=useState<PeriodFinancialTotal|null>(null);
-  const [activeTab, setActiveTab] = useState<"summary" | "transactions" | "traffic" | "ads" | "analysis" | "operations">("summary");
+  const [activeTab, setActiveTab] = useState<"summary" | "transactions" | "traffic" | "ads" | "analysis" | "operations" | "connections">("summary");
   const [visibleCards,setVisibleCards]=useState<string[]>(()=>{try{const v=JSON.parse(localStorage.getItem("trackup_summary_visible_v3")||"null");return Array.isArray(v)?v:["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}catch{return ["Faturamento histórico","Vendas aprovadas (histórico)","Faturamento do dia","Vendas identificadas","Envios pelo TrackUp","Exigem atenção"]}});
   const [editCards,setEditCards]=useState(false);
   const [selectedOffer,setSelectedOffer]=useState("all");
@@ -1311,6 +1312,7 @@ function Index() {
           <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Buscar vendas por código, produto, campanha ou criativo<input type="search" value={searchSales} onChange={e=>setSearchSales(e.target.value)} placeholder="Pesquisar vendas..." className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /></label>
           {searchSales&&<button type="button" className="rounded-lg border px-3 py-2 text-xs font-bold" onClick={()=>setSearchSales("")}>Limpar busca</button>}
         </div>}
+        {activeTab === "connections" && <MetaConnectionPanel dashboardKey={dashboardKey!} />}
         {activeTab === "operations" && <OperationsPanel rows={dayRows} date={selectedDate} metaCapiEnabled={metaCapiEnabled} generatedAt={generatedAt} onOpenSales={()=>setActiveTab("transactions")} onRefresh={()=>{if(dashboardKey)void fetchDashboard(dashboardKey)}} refreshing={refreshing} />}
         {activeTab === "ads" && <MetaAdsPanel dashboardKey={dashboardKey} date={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
          {activeTab === "analysis" && <AdAnalysisPanel dashboardKey={dashboardKey!} dashboardDate={selectedDate} approvedCount={approved.length} approvedRevenue={revenue} />}
