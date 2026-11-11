@@ -19,9 +19,12 @@ export function TrackingSnippetPanel(){
  function id(prefix){return prefix+"_"+Array.from(crypto.getRandomValues(new Uint8Array(12))).map(function(b){return b.toString(16).padStart(2,"0")}).join("");}
  var tid;try{tid=sessionStorage.getItem("trackup_id");if(!tid||!/^trk_[a-z0-9_]+$/i.test(tid)){tid=id("trk");sessionStorage.setItem("trackup_id",tid);}}catch(e){tid=id("trk");}
  var vid;try{vid=localStorage.getItem("trackup_visitor");if(!vid||!/^vis_[a-z0-9_]+$/i.test(vid)){vid=id("vis");localStorage.setItem("trackup_visitor",vid);}}catch(e){vid=id("vis");}
- var fbclid=qs.get("fbclid")||"";
+ var savedCampaign={};try{savedCampaign=JSON.parse(sessionStorage.getItem("trackup_utms")||"{}")}catch(e){}
+ var campaign={};["utm_source","utm_medium","utm_campaign","utm_content","utm_term","fbclid"].forEach(function(k){campaign[k]=qs.get(k)||savedCampaign[k]||"";});
+ try{sessionStorage.setItem("trackup_utms",JSON.stringify(campaign))}catch(e){}
+ var fbclid=campaign.fbclid||"";
  var fbc=cookie("_fbc")||(fbclid?"fb.1."+Date.now()+"."+fbclid:"");
- var data={tracking_id:tid,visitor_id:vid,landing_ts:Date.now(),fbclid:fbclid,fbp:cookie("_fbp"),fbc:fbc,utm_source:qs.get("utm_source")||"",utm_medium:qs.get("utm_medium")||"",utm_campaign:qs.get("utm_campaign")||"",utm_content:qs.get("utm_content")||"",utm_term:qs.get("utm_term")||"",landing_url:location.href,referrer:document.referrer,user_agent:navigator.userAgent};
+ var data={tracking_id:tid,visitor_id:vid,landing_ts:Date.now(),fbclid:fbclid,fbp:cookie("_fbp"),fbc:fbc,utm_source:campaign.utm_source||"",utm_medium:campaign.utm_medium||"",utm_campaign:campaign.utm_campaign||"",utm_content:campaign.utm_content||"",utm_term:campaign.utm_term||"",landing_url:location.href,referrer:document.referrer,user_agent:navigator.userAgent};
  function post(route,body){try{fetch(endpoint+"/"+route,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),keepalive:true}).catch(function(){});}catch(e){}}
  post("tracking-start",data);
  function event(name,key){post("tracking-event",{tracking_id:tid,event_name:name,event_key:key||"once",metadata:{url:location.href}});}
