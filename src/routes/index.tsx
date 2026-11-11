@@ -698,6 +698,7 @@ function Index() {
   const [financeView,setFinanceView]=useState<"day"|"range">("day");
   const [periodFinance,setPeriodFinance]=useState<PeriodFinancialTotal|null>(null);
   const [dashboardRange,setDashboardRange]=useState<{start:string;end:string}|null>(null);
+  const [authorizedPixel,setAuthorizedPixel]=useState("");
   const [customRangeOpen,setCustomRangeOpen]=useState(false);
   const [rangeStart,setRangeStart]=useState(()=>shiftDateKey(todayDateKey(),-6));
   const [rangeEnd,setRangeEnd]=useState(()=>todayDateKey());
@@ -1352,7 +1353,7 @@ function Index() {
           <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Buscar vendas por código, produto, campanha ou criativo<input type="search" value={searchSales} onChange={e=>setSearchSales(e.target.value)} placeholder="Pesquisar vendas..." className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /></label>
           {searchSales&&<button type="button" className="rounded-lg border px-3 py-2 text-xs font-bold" onClick={()=>setSearchSales("")}>Limpar busca</button>}
         </div>}
-        {activeTab === "connections" && <div className="space-y-5"><MetaConnectionPanel dashboardKey={dashboardKey!}/><TrackingSnippetPanel/></div>}
+        {activeTab === "connections" && <div className="space-y-5"><MetaConnectionPanel dashboardKey={dashboardKey!} onPixelSelected={setAuthorizedPixel}/><TrackingSnippetPanel selectedPixelId={authorizedPixel}/></div>}
         {activeTab === "operations" && <OperationsPanel rows={dayRows} date={selectedDate} metaCapiEnabled={metaCapiEnabled} generatedAt={generatedAt} onOpenSales={()=>setActiveTab("transactions")} onRefresh={()=>{if(dashboardKey)void fetchDashboard(dashboardKey)}} refreshing={refreshing} />}
         {activeTab === "ads" && <div className="space-y-5">
           <CampaignControlPanel dashboardKey={dashboardKey!} start={financeView==="range"&&dashboardRange?dashboardRange.start:selectedDate} end={financeView==="range"&&dashboardRange?dashboardRange.end:selectedDate} onConnect={()=>setActiveTab("connections")}/>
